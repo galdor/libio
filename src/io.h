@@ -37,6 +37,8 @@ struct io_address {
 int io_address_init(struct io_address *, const char *, uint16_t);
 int io_address_init_from_sockaddr(struct io_address *,
                                   const struct sockaddr *, socklen_t);
+int io_address_init_from_sockaddr_storage(struct io_address *,
+                                          const struct sockaddr_storage *);
 
 int io_address_family(const struct io_address *);
 uint16_t io_address_port(const struct io_address *);

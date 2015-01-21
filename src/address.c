@@ -93,6 +93,14 @@ io_address_init_from_sockaddr(struct io_address *address,
 }
 
 int
+io_address_init_from_sockaddr_storage(struct io_address *address,
+                                      const struct sockaddr_storage *ss) {
+    return io_address_init_from_sockaddr(address,
+                                         (const struct sockaddr *)ss,
+                                         sizeof(struct sockaddr_storage));
+}
+
+int
 io_address_family(const struct io_address *address) {
     return address->ss.ss_family;
 }
