@@ -18,6 +18,10 @@
 #ifndef LIBIO_INTERNAL_H
 #define LIBIO_INTERNAL_H
 
+#include <assert.h>
+#include <errno.h>
+#include <string.h>
+
 #include "io.h"
 
 /* Socket addresses */

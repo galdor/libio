@@ -50,4 +50,8 @@ socklen_t io_address_length(const struct io_address *);
 
 void io_address_set_port(struct io_address *, uint16_t);
 
+/* File descriptors */
+int io_fd_set_blocking(int);
+int io_fd_set_non_blocking(int);
+
 #endif
