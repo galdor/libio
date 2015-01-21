@@ -46,4 +46,6 @@ const char *io_address_host_port_string(const struct io_address *);
 struct sockaddr *io_address_sockaddr(const struct io_address *);
 socklen_t io_address_length(const struct io_address *);
 
+void io_address_set_port(struct io_address *, uint16_t);
+
 #endif

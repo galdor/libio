@@ -142,6 +142,31 @@ io_address_length(const struct io_address *address) {
     return address->sslen;
 }
 
+void
+io_address_set_port(struct io_address *address, uint16_t port) {
+    struct sockaddr_in *sa;
+    struct sockaddr_in6 *sa6;
+    uint16_t *pport;
+
+    switch (address->ss.ss_family) {
+    case AF_INET:
+        sa = io_address_sockaddr_in(address);
+        pport = &sa->sin_port;
+        break;
+
+    case AF_INET6:
+        sa6 = io_address_sockaddr_in6(address);
+        port = sa6->sin6_port;
+        pport = &sa6->sin6_port;
+        break;
+
+    default:
+        return;
+    }
+
+    *pport = ntohs(port);
+}
+
 static struct sockaddr_in *
 io_address_sockaddr_in(const struct io_address *address) {
     assert(address->ss.ss_family == AF_INET);

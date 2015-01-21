@@ -84,6 +84,22 @@ TEST(init_from_sockaddr) {
 #undef IOT_INIT_FROM_SA
 }
 
+TEST(set_port) {
+    struct io_address addr;
+
+    TEST_INT_EQ(io_address_init(&addr, "127.0.0.1", 123), 0);
+    TEST_UINT_EQ(io_address_port(&addr), 123);
+
+    io_address_set_port(&addr, 456);
+    TEST_UINT_EQ(io_address_port(&addr), 456);
+
+    io_address_set_port(&addr, 0);
+    TEST_UINT_EQ(io_address_port(&addr), 0);
+
+    io_address_set_port(&addr, 65535);
+    TEST_UINT_EQ(io_address_port(&addr), 65535);
+}
+
 int
 main(int argc, char **argv) {
     struct test_suite *suite;
@@ -95,6 +111,7 @@ main(int argc, char **argv) {
 
     TEST_RUN(suite, init);
     TEST_RUN(suite, init_from_sockaddr);
+    TEST_RUN(suite, set_port);
 
     test_suite_print_results_and_exit(suite);
 }

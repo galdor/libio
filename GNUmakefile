@@ -131,12 +131,12 @@ install: lib
 	mkdir -p $(libdir) $(incdir) $(bindir)
 	install -m 644 $(libio_LIB) $(libdir)
 	install -m 644 $(libio_PUBINC) $(incdir)
-	install -m 755 $(utils_BIN) $(bindir)
+	#install -m 755 $(utils_BIN) $(bindir)
 
 uninstall:
 	$(RM) $(addprefix $(libdir)/,$(libio_LIB))
 	$(RM) $(addprefix $(incdir)/,$(libio_PUBINC))
-	$(RM) $(addprefix $(bindir)/,$(utils_BIN))
+	#$(RM) $(addprefix $(bindir)/,$(utils_BIN))
 
 tags:
 	ctags -o .tags -a $(wildcard src/*.[hc])
