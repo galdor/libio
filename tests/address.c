@@ -89,13 +89,19 @@ TEST(set_port) {
 
     TEST_INT_EQ(io_address_init(&addr, "127.0.0.1", 123), 0);
     TEST_UINT_EQ(io_address_port(&addr), 123);
-
     io_address_set_port(&addr, 456);
     TEST_UINT_EQ(io_address_port(&addr), 456);
-
     io_address_set_port(&addr, 0);
     TEST_UINT_EQ(io_address_port(&addr), 0);
+    io_address_set_port(&addr, 65535);
+    TEST_UINT_EQ(io_address_port(&addr), 65535);
 
+    TEST_INT_EQ(io_address_init(&addr, "::1", 123), 0);
+    TEST_UINT_EQ(io_address_port(&addr), 123);
+    io_address_set_port(&addr, 456);
+    TEST_UINT_EQ(io_address_port(&addr), 456);
+    io_address_set_port(&addr, 0);
+    TEST_UINT_EQ(io_address_port(&addr), 0);
     io_address_set_port(&addr, 65535);
     TEST_UINT_EQ(io_address_port(&addr), 65535);
 }

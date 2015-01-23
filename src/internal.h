@@ -24,6 +24,4 @@
 
 #include "io.h"
 
-/* Socket addresses */
-
 #endif

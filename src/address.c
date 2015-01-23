@@ -163,7 +163,6 @@ io_address_set_port(struct io_address *address, uint16_t port) {
 
     case AF_INET6:
         sa6 = io_address_sockaddr_in6(address);
-        port = sa6->sin6_port;
         pport = &sa6->sin6_port;
         break;
 
