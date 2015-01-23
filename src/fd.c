@@ -24,12 +24,12 @@ static int io_fd_add_remove_flags(int, int, int);
 
 int
 io_fd_set_blocking(int fd) {
-    return io_fd_add_remove_flags(fd, O_NONBLOCK, 0);
+    return io_fd_add_remove_flags(fd, 0, O_NONBLOCK);
 }
 
 int
 io_fd_set_non_blocking(int fd) {
-    return io_fd_add_remove_flags(fd, 0, O_NONBLOCK);
+    return io_fd_add_remove_flags(fd, O_NONBLOCK, 0);
 }
 
 static int
