@@ -171,6 +171,8 @@ io_address_set_port(struct io_address *address, uint16_t port) {
     }
 
     *pport = ntohs(port);
+
+    io_address_update_strings(address);
 }
 
 static struct sockaddr_in *
