@@ -9,8 +9,11 @@ CC=   clang
 CFLAGS+= -std=c99
 CFLAGS+= -Wall -Wextra -Werror -Wsign-conversion
 CFLAGS+= -Wno-unused-parameter -Wno-unused-function
+CFLAGS+= -Isrc
 
-LDFLAGS=
+LDFLAGS+= -L.
+
+LDLIBS+= -lio -lcore -lutest
 
 PANDOC_OPTS= -s --toc --email-obfuscation=none
 
@@ -22,7 +25,7 @@ ifeq ($(platform), Linux)
 	CFLAGS+= -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
 endif
 
-ifeq ($(platform), Linux)
+ifeq ($(platform), FreeBSD)
 	CFLAGS+= -DIO_PLATFORM_FREEBSD
 endif
 
@@ -49,34 +52,20 @@ libio_INC= $(wildcard src/*.h)
 libio_PUBINC= src/io.h
 libio_OBJ= $(subst .c,.o,$(libio_SRC))
 
-$(libio_LIB): CFLAGS+=
-
 # Target: tests
 tests_SRC= $(wildcard tests/*.c)
 tests_OBJ= $(subst .c,.o,$(tests_SRC))
 tests_BIN= $(subst .o,,$(tests_OBJ))
-
-$(tests_BIN): CFLAGS+= -Isrc
-$(tests_BIN): LDFLAGS+= -L.
-$(tests_BIN): LDLIBS+= -lio -lcore -lutest
 
 # Target: utils
 utils_SRC= $(wildcard utils/*.c)
 utils_OBJ= $(subst .c,.o,$(utils_SRC))
 utils_BIN= $(subst .o,,$(utils_OBJ))
 
-$(utils_BIN): CFLAGS+= -Isrc
-$(utils_BIN): LDFLAGS+= -L.
-$(utils_BIN): LDLIBS+= -lio -lcore
-
 # Target: examples
 examples_SRC= $(wildcard examples/*.c)
 examples_OBJ= $(subst .c,.o,$(examples_SRC))
 examples_BIN= $(subst .o,,$(examples_OBJ))
-
-$(examples_BIN): CFLAGS+= -Isrc
-$(examples_BIN): LDFLAGS+= -L.
-$(examples_BIN): LDLIBS+= -lio -lcore -lutest
 
 # Target: doc
 doc_SRC= $(wildcard doc/*.mkd)

@@ -4,4 +4,6 @@
 session.vim
 .tags
 
+/examples/signals
+
 /tests/address
