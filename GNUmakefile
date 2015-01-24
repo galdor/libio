@@ -27,6 +27,8 @@ endif
 
 ifeq ($(platform), FreeBSD)
 	CFLAGS+= -DIO_PLATFORM_FREEBSD
+	CFLAGS+= -I/usr/local/include
+	LDFLAGS+= -L/usr/local/lib
 endif
 
 # Debug

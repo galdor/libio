@@ -159,14 +159,13 @@ io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
     if (watcher->events & IO_EVENT_FD_ERROR)
         event.events |= EPOLLERR;
 
-    if (watcher->u.fd.registered) {
+    if (watcher->registered) {
         if (epoll_ctl(base->fd, EPOLL_CTL_MOD, fd, &event) == -1) {
             c_set_error("cannot update fd in epoll instance: %s",
                         strerror(errno));
             return -1;
         }
 
-        watcher->u.fd.registered = true;
         return 0;
     }
 

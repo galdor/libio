@@ -122,13 +122,22 @@ io_base_watch_signal(struct io_base *base, int signo,
         watcher->cb_arg = arg;
 
         watcher->u.signal.signo = signo;
-        watcher->u.signal.fd = -1;
         watcher->u.signal.cb = cb;
 
         c_hash_table_insert(base->watchers, &watcher->key, watcher);
     }
 
-    return io_base_enable_signal_backend(base, watcher);
+    if (io_base_enable_signal_backend(base, watcher) == -1) {
+        if (!watcher->registered) {
+            c_hash_table_remove(base->watchers, &watcher->key);
+            io_watcher_delete(watcher);
+        }
+
+        return -1;
+    }
+
+    watcher->registered = true;
+    return 0;
 }
 
 int
@@ -172,7 +181,17 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
         c_hash_table_insert(base->watchers, &watcher->key, watcher);
     }
 
-    return io_base_enable_fd_backend(base, watcher);
+    if (io_base_enable_fd_backend(base, watcher) == -1) {
+        if (!watcher->registered) {
+            c_hash_table_remove(base->watchers, &watcher->key);
+            io_watcher_delete(watcher);
+        }
+
+        return -1;
+    }
+
+    watcher->registered = true;
+    return 0;
 }
 
 int

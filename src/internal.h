@@ -41,7 +41,9 @@ uint64_t io_watcher_key_signo(int);
 struct io_watcher {
     enum io_watcher_type type;
     uint32_t events; /* enum io_event */
+
     uint64_t key;
+    bool registered;
 
     void *cb_arg;
 
@@ -49,7 +51,6 @@ struct io_watcher {
         struct {
             int fd;
             io_fd_callback cb;
-            bool registered;
         } fd;
 
         struct {
