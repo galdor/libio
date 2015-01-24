@@ -57,7 +57,8 @@ void
 io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
     switch (watcher->type) {
     case IO_WATCHER_FD:
-        /* TODO */
+        if (watcher->u.fd.cb)
+            watcher->u.fd.cb(watcher->u.fd.fd, events, watcher->cb_arg);
         break;
 
     case IO_WATCHER_SIGNAL:
@@ -117,7 +118,7 @@ io_base_watch_signal(struct io_base *base, int signo,
         watcher = io_watcher_new(IO_WATCHER_SIGNAL);
 
         watcher->events = IO_EVENT_SIGNAL_RECEIVED;
-        watcher->key = io_watcher_key_signo(signo);
+        watcher->key = key;
         watcher->cb_arg = arg;
 
         watcher->u.signal.signo = signo;
@@ -127,7 +128,7 @@ io_base_watch_signal(struct io_base *base, int signo,
         c_hash_table_insert(base->watchers, &watcher->key, watcher);
     }
 
-    return io_base_enable_watcher_signal_backend(base, watcher);
+    return io_base_enable_signal_backend(base, watcher);
 }
 
 int
@@ -142,11 +143,54 @@ io_base_unwatch_signal(struct io_base *base, int signo) {
         return -1;
     }
 
-    if (io_base_disable_watcher_signal_backend(base, watcher) == -1)
+    if (io_base_disable_signal_backend(base, watcher) == -1)
         return -1;
 
     c_hash_table_remove(base->watchers, &key);
+    io_watcher_delete(watcher);
+    return 0;
+}
 
+int
+io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
+                 io_fd_callback cb, void *arg) {
+    struct io_watcher *watcher;
+    uint64_t key;
+
+    key = io_watcher_key_fd(fd);
+
+    if (c_hash_table_get(base->watchers, &key, (void **)&watcher) == 0) {
+        watcher = io_watcher_new(IO_WATCHER_FD);
+
+        watcher->events = events;
+        watcher->key = key;
+        watcher->cb_arg = arg;
+
+        watcher->u.fd.fd = fd;
+        watcher->u.fd.cb = cb;
+
+        c_hash_table_insert(base->watchers, &watcher->key, watcher);
+    }
+
+    return io_base_enable_fd_backend(base, watcher);
+}
+
+int
+io_base_unwatch_fd(struct io_base *base, int fd) {
+    struct io_watcher *watcher;
+    uint64_t key;
+
+    key = io_watcher_key_fd(fd);
+
+    if (c_hash_table_get(base->watchers, &key, (void **)&watcher) == 0) {
+        c_set_error("no watcher found");
+        return -1;
+    }
+
+    if (io_base_disable_fd_backend(base, watcher) == -1)
+        return -1;
+
+    c_hash_table_remove(base->watchers, &key);
     io_watcher_delete(watcher);
     return 0;
 }

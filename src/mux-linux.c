@@ -62,8 +62,8 @@ io_base_free_backend(struct io_base *base) {
 }
 
 int
-io_base_enable_watcher_signal_backend(struct io_base *base,
-                                      struct io_watcher *watcher) {
+io_base_enable_signal_backend(struct io_base *base,
+                              struct io_watcher *watcher) {
     struct epoll_event event;
     sigset_t mask;
     int fd;
@@ -114,15 +114,15 @@ io_base_enable_watcher_signal_backend(struct io_base *base,
 }
 
 int
-io_base_disable_watcher_signal_backend(struct io_base *base,
-                                       struct io_watcher *watcher) {
+io_base_disable_signal_backend(struct io_base *base,
+                               struct io_watcher *watcher) {
     sigset_t mask;
 
     assert(watcher->type == IO_WATCHER_SIGNAL);
 
     if (epoll_ctl(base->fd, EPOLL_CTL_DEL, watcher->u.signal.fd, NULL) == -1) {
         c_set_error("cannot remove signal fd from epoll instance: %s",
-                    c_get_error());
+                    strerror(errno));
         return -1;
     }
 
@@ -134,6 +134,61 @@ io_base_disable_watcher_signal_backend(struct io_base *base,
     sigprocmask(SIG_UNBLOCK, &mask, NULL);
 
     watcher->u.signal.fd = -1;
+    return 0;
+}
+
+int
+io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
+    struct epoll_event event;
+    int fd;
+
+    assert(watcher->type == IO_WATCHER_FD);
+
+    fd = watcher->u.fd.fd;
+
+    memset(&event, 0, sizeof(struct epoll_event));
+    event.events = 0;
+    event.data.ptr = watcher;
+
+    if (watcher->events & IO_EVENT_FD_READ)
+        event.events |= EPOLLIN;
+    if (watcher->events & IO_EVENT_FD_WRITE)
+        event.events |= EPOLLOUT;
+    if (watcher->events & IO_EVENT_FD_HANGHUP)
+        event.events |= EPOLLHUP;
+    if (watcher->events & IO_EVENT_FD_ERROR)
+        event.events |= EPOLLERR;
+
+    if (watcher->u.fd.registered) {
+        if (epoll_ctl(base->fd, EPOLL_CTL_MOD, fd, &event) == -1) {
+            c_set_error("cannot update fd in epoll instance: %s",
+                        strerror(errno));
+            return -1;
+        }
+
+        watcher->u.fd.registered = true;
+        return 0;
+    }
+
+    if (epoll_ctl(base->fd, EPOLL_CTL_ADD, fd, &event) == -1) {
+        c_set_error("cannot add fd to epoll instance: %s",
+                    strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+int
+io_base_disable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
+    assert(watcher->type == IO_WATCHER_FD);
+
+    if (epoll_ctl(base->fd, EPOLL_CTL_DEL, watcher->u.fd.fd, NULL) == -1) {
+        c_set_error("cannot remove fd from epoll instance: %s",
+                    strerror(errno));
+        return -1;
+    }
+
     return 0;
 }
 

@@ -46,7 +46,12 @@ struct io_watcher {
     void *cb_arg;
 
     union {
-        int fd;
+        struct {
+            int fd;
+            io_fd_callback cb;
+            bool registered;
+        } fd;
+
         struct {
             int signo;
             io_signal_callback cb;
@@ -75,10 +80,13 @@ struct io_base {
 int io_base_init_backend(struct io_base *);
 void io_base_free_backend(struct io_base *);
 
-int io_base_enable_watcher_signal_backend(struct io_base *,
+int io_base_enable_signal_backend(struct io_base *,
                                           struct io_watcher *);
-int io_base_disable_watcher_signal_backend(struct io_base *,
+int io_base_disable_signal_backend(struct io_base *,
                                            struct io_watcher *);
+
+int io_base_enable_fd_backend(struct io_base *, struct io_watcher *);
+int io_base_disable_fd_backend(struct io_base *, struct io_watcher *);
 
 int io_base_read_events_backend(struct io_base *);
 

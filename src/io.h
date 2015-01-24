@@ -62,21 +62,25 @@ int io_fd_set_non_blocking(int);
  *  Event multiplexing
  * ------------------------------------------------------------------------ */
 enum io_event {
-    IO_EVENT_FD_READ,
-    IO_EVENT_FD_WRITE,
-    IO_EVENT_FD_HANGHUP,
-    IO_EVENT_FD_ERROR,
+    IO_EVENT_FD_READ           = (1 << 0),
+    IO_EVENT_FD_WRITE          = (1 << 1),
+    IO_EVENT_FD_HANGHUP        = (1 << 2),
+    IO_EVENT_FD_ERROR          = (1 << 3),
 
-    IO_EVENT_SIGNAL_RECEIVED,
+    IO_EVENT_SIGNAL_RECEIVED   = (1 << 4),
 };
 
 typedef void (*io_signal_callback)(int, void *);
+typedef void (*io_fd_callback)(int, uint32_t, void *);
 
 struct io_base *io_base_new(void);
 void io_base_delete(struct io_base *);
 
 int io_base_watch_signal(struct io_base *, int, io_signal_callback, void *);
 int io_base_unwatch_signal(struct io_base *, int);
+
+int io_base_watch_fd(struct io_base *, int, uint32_t, io_fd_callback, void *);
+int io_base_unwatch_fd(struct io_base *, int);
 
 bool io_base_has_watchers(const struct io_base *);
 int io_base_read_events(struct io_base *);
