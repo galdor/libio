@@ -331,7 +331,6 @@ io_base_add_timer(struct io_base *base, uint64_t duration, uint32_t flags,
     watcher->u.timer.duration = duration;
     watcher->u.timer.flags = flags;
     watcher->u.timer.start_time = now;
-    watcher->u.timer.expiration_time = now + duration;
     watcher->u.timer.cb = cb;
 
     if (io_base_enable_timer_backend(base, watcher) == -1) {

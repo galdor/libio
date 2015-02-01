@@ -189,7 +189,7 @@ int
 io_base_enable_timer_backend(struct io_base *base, struct io_watcher *watcher) {
     struct epoll_event event;
     struct itimerspec its;
-    uint64_t duration, expiration_time;
+    uint64_t duration;
     int fd;
 
     assert(watcher->type == IO_WATCHER_TIMER);
@@ -197,7 +197,6 @@ io_base_enable_timer_backend(struct io_base *base, struct io_watcher *watcher) {
 
     fd = watcher->u.timer.fd;
     duration = watcher->u.timer.duration;
-    expiration_time = watcher->u.timer.expiration_time;
 
     fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     if (fd == -1) {

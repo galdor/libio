@@ -67,7 +67,6 @@ struct io_watcher {
             uint32_t flags; /* enum io_timer_flag */
 
             uint64_t start_time; /* millisecond monotonic clock */
-            uint64_t expiration_time; /* millisecond monotonic clock */
 
             bool expired;
 
