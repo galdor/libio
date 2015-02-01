@@ -207,15 +207,15 @@ io_base_enable_timer_backend(struct io_base *base, struct io_watcher *watcher) {
 
     memset(&its, 0, sizeof(struct itimerspec));
 
-    its.it_value.tv_sec = expiration_time / 1000;
-    its.it_value.tv_nsec = (expiration_time % 1000) * 1000000;
+    its.it_value.tv_sec = duration / 1000;
+    its.it_value.tv_nsec = (duration % 1000) * 1000000;
 
     if (watcher->u.timer.flags & IO_TIMER_RECURRENT) {
-        its.it_interval.tv_sec = duration / 1000;
-        its.it_interval.tv_nsec = (duration % 1000) * 1000000;
+        its.it_interval.tv_sec = its.it_value.tv_sec;
+        its.it_interval.tv_nsec = its.it_value.tv_nsec;
     }
 
-    if (timerfd_settime(fd, TFD_TIMER_ABSTIME, &its, NULL) == -1) {
+    if (timerfd_settime(fd, 0, &its, NULL) == -1) {
         c_set_error("cannot arm timer fd: %s", strerror(errno));
         close(fd);
         return -1;
