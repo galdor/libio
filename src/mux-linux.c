@@ -86,8 +86,6 @@ io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
         event.events |= EPOLLOUT;
     if (watcher->events & IO_EVENT_FD_HANGUP)
         event.events |= EPOLLHUP;
-    if (watcher->events & IO_EVENT_FD_ERROR)
-        event.events |= EPOLLERR;
 
     if (watcher->registered) {
         if (epoll_ctl(base->fd, EPOLL_CTL_MOD, fd, &event) == -1) {
@@ -296,8 +294,6 @@ io_base_read_events_backend(struct io_base *base) {
             events |= IO_EVENT_FD_WRITE;
         if (event.events & EPOLLHUP)
             events |= IO_EVENT_FD_HANGUP;
-        if (event.events & EPOLLERR)
-            events |= IO_EVENT_FD_ERROR;
         break;
 
     case IO_WATCHER_SIGNAL:

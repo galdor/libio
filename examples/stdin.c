@@ -50,7 +50,7 @@ main(int argc, char **argv) {
         ioex_die("cannot watch signal: %s", c_get_error());
 
     fd = STDIN_FILENO;
-    events = IO_EVENT_FD_READ | IO_EVENT_FD_HANGUP | IO_EVENT_FD_ERROR;
+    events = IO_EVENT_FD_READ | IO_EVENT_FD_HANGUP;
 
     if (io_base_watch_fd(ioex.base, fd, events,
                          ioex_on_stdin_event, NULL) == -1) {
