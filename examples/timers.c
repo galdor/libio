@@ -78,14 +78,18 @@ static void
 ioex_on_timer1(uint64_t duration, void *arg) {
     static uint32_t count = 0;
 
-    printf("timer1: %"PRIu64"ms\n", duration);
+    printf("timer 1: %"PRIu64"ms\n", duration);
 
-    if (++count >= 3)
-        io_base_remove_timer(ioex.base, ioex.timer1);
+    if (++count >= 3) {
+        if (io_base_remove_timer(ioex.base, ioex.timer1) == -1)
+            ioex_die("cannot remove timer 1: %s", c_get_error());
+    }
 }
 
 static void
 ioex_on_timer2(uint64_t duration, void *arg) {
-    printf("timer2: %"PRIu64"ms\n", duration);
-    io_base_remove_timer(ioex.base, ioex.timer2);
+    printf("timer 2: %"PRIu64"ms\n", duration);
+
+    if (io_base_remove_timer(ioex.base, ioex.timer2) == -1)
+        ioex_die("cannot remove timer 2: %s", c_get_error());
 }

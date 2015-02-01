@@ -105,6 +105,8 @@ ioex_on_stdin_event(int fd, uint32_t events, void *arg) {
         printf("%zi bytes read on stdin\n", ret);
     }
 
-    if (events & IO_EVENT_FD_HANGHUP)
+    if (events & IO_EVENT_FD_HANGHUP) {
+        printf("stdin hanged up\n");
         ioex.do_exit = true;
+    }
 }
