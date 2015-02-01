@@ -9,3 +9,4 @@ session.vim
 /examples/timers
 
 /tests/address
+/tests/watcher-array
