@@ -50,7 +50,7 @@ main(int argc, char **argv) {
         ioex_die("cannot watch signal: %s", c_get_error());
 
     fd = STDIN_FILENO;
-    events = IO_EVENT_FD_READ | IO_EVENT_FD_HANGHUP | IO_EVENT_FD_ERROR;
+    events = IO_EVENT_FD_READ | IO_EVENT_FD_HANGUP | IO_EVENT_FD_ERROR;
 
     if (io_base_watch_fd(ioex.base, fd, events,
                          ioex_on_stdin_event, NULL) == -1) {
@@ -105,7 +105,7 @@ ioex_on_stdin_event(int fd, uint32_t events, void *arg) {
         printf("%zi bytes read on stdin\n", ret);
     }
 
-    if (events & IO_EVENT_FD_HANGHUP) {
+    if (events & IO_EVENT_FD_HANGUP) {
         printf("stdin hanged up\n");
         ioex.do_exit = true;
     }

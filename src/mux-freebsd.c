@@ -76,7 +76,7 @@ io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
     nb_events = 0;
 
     if (watcher->events & IO_EVENT_FD_READ
-     || watcher->events & IO_EVENT_FD_HANGHUP) {
+     || watcher->events & IO_EVENT_FD_HANGUP) {
         events[nb_events].ident = (uintptr_t)watcher->u.signal.signo;
         events[nb_events].filter = EVFILT_READ;
         events[nb_events].flags = EV_ADD;
@@ -113,7 +113,7 @@ io_base_disable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
     nb_events = 0;
 
     if (watcher->events & IO_EVENT_FD_READ
-     || watcher->events & IO_EVENT_FD_HANGHUP) {
+     || watcher->events & IO_EVENT_FD_HANGUP) {
         events[nb_events].ident = (uintptr_t)watcher->u.signal.signo;
         events[nb_events].filter = EVFILT_READ;
         events[nb_events].flags = EV_DELETE;
@@ -280,7 +280,7 @@ io_base_read_events_backend(struct io_base *base) {
             events |= IO_EVENT_FD_READ;
 
             if (event.flags & EV_EOF)
-                events |= IO_EVENT_FD_HANGHUP;
+                events |= IO_EVENT_FD_HANGUP;
         } else if (event.filter == EVFILT_WRITE) {
             events |= IO_EVENT_FD_WRITE;
         }

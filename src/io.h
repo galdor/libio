@@ -76,7 +76,7 @@ enum io_timer_flag {
 enum io_event {
     IO_EVENT_FD_READ         = (1 << 0),
     IO_EVENT_FD_WRITE        = (1 << 1),
-    IO_EVENT_FD_HANGHUP      = (1 << 2),
+    IO_EVENT_FD_HANGUP       = (1 << 2),
     IO_EVENT_FD_ERROR        = (1 << 3),
 
     IO_EVENT_SIGNAL_RECEIVED = (1 << 4),
