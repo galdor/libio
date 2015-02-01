@@ -134,16 +134,6 @@ io_base_enable_signal_backend(struct io_base *base,
     event.events = EPOLLIN;
     event.data.ptr = watcher;
 
-    if (watcher->registered) {
-        if (epoll_ctl(base->fd, EPOLL_CTL_MOD, fd, &event) == -1) {
-            c_set_error("cannot update signal fd in epoll instance: %s",
-                        strerror(errno));
-            return -1;
-        }
-
-        return 0;
-    }
-
     sigemptyset(&mask);
     sigaddset(&mask, watcher->u.signal.signo);
 

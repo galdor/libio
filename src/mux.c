@@ -250,26 +250,26 @@ int
 io_base_watch_signal(struct io_base *base, int signo,
                      io_signal_callback cb, void *arg) {
     struct io_watcher *watcher;
-    bool is_new;
 
     assert(signo >= 0);
 
     watcher = io_watcher_array_get(&base->signal_watchers, signo);
-    if (!watcher) {
-        is_new = true;
-
-        watcher = io_watcher_new(IO_WATCHER_SIGNAL);
-
-        watcher->events = IO_EVENT_SIGNAL_RECEIVED;
+    if (watcher) {
         watcher->cb_arg = arg;
-
-        watcher->u.signal.signo = signo;
         watcher->u.signal.cb = cb;
+        return 0;
     }
 
+    watcher = io_watcher_new(IO_WATCHER_SIGNAL);
+
+    watcher->events = IO_EVENT_SIGNAL_RECEIVED;
+    watcher->cb_arg = arg;
+
+    watcher->u.signal.signo = signo;
+    watcher->u.signal.cb = cb;
+
     if (io_base_enable_signal_backend(base, watcher) == -1) {
-        if (is_new)
-            io_watcher_delete(watcher);
+        io_watcher_delete(watcher);
         return -1;
     }
 
