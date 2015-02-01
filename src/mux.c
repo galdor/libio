@@ -128,7 +128,24 @@ io_watcher_array_remove(struct io_watcher_array *array, int id) {
     array->watchers[id] = NULL;
     array->nb_watchers--;
 
-    /* TODO shrink if possible */
+    if ((size_t)id == (array->size - 1) && array->size >= 9) {
+        size_t last_unused, limit;
+
+        last_unused = array->size - 1;
+        while (last_unused > 0) {
+            if (array->watchers[last_unused - 1])
+                break;
+
+            last_unused--;
+        }
+
+        limit = (array->size / 3) * 2;
+        if (last_unused < limit) {
+            array->watchers = c_realloc(array->watchers,
+                                        limit * sizeof(struct io_watcher *));
+            array->size = limit;
+        }
+    }
 }
 
 struct io_watcher *
