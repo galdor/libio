@@ -59,28 +59,47 @@ int io_fd_set_blocking(int);
 int io_fd_set_non_blocking(int);
 
 /* ------------------------------------------------------------------------
+ *  Time
+ * ------------------------------------------------------------------------ */
+int io_read_monotonic_clock_ms(uint64_t *);
+
+/* ------------------------------------------------------------------------
+ *  Timers
+ * ------------------------------------------------------------------------ */
+enum io_timer_flag {
+    IO_TIMER_RECURRENT = (1 << 0),
+};
+
+/* ------------------------------------------------------------------------
  *  Event multiplexing
  * ------------------------------------------------------------------------ */
 enum io_event {
-    IO_EVENT_FD_READ           = (1 << 0),
-    IO_EVENT_FD_WRITE          = (1 << 1),
-    IO_EVENT_FD_HANGHUP        = (1 << 2),
-    IO_EVENT_FD_ERROR          = (1 << 3),
+    IO_EVENT_FD_READ         = (1 << 0),
+    IO_EVENT_FD_WRITE        = (1 << 1),
+    IO_EVENT_FD_HANGHUP      = (1 << 2),
+    IO_EVENT_FD_ERROR        = (1 << 3),
 
-    IO_EVENT_SIGNAL_RECEIVED   = (1 << 4),
+    IO_EVENT_SIGNAL_RECEIVED = (1 << 4),
+
+    IO_EVENT_TIMER_EXPIRED   = (1 << 5),
 };
 
 typedef void (*io_signal_callback)(int, void *);
 typedef void (*io_fd_callback)(int, uint32_t, void *);
+typedef void (*io_timer_callback)(uint64_t, void *);
 
 struct io_base *io_base_new(void);
 void io_base_delete(struct io_base *);
 
+int io_base_watch_fd(struct io_base *, int, uint32_t, io_fd_callback, void *);
+int io_base_unwatch_fd(struct io_base *, int);
+
 int io_base_watch_signal(struct io_base *, int, io_signal_callback, void *);
 int io_base_unwatch_signal(struct io_base *, int);
 
-int io_base_watch_fd(struct io_base *, int, uint32_t, io_fd_callback, void *);
-int io_base_unwatch_fd(struct io_base *, int);
+int io_base_add_timer(struct io_base *, uint64_t, uint32_t,
+                      io_timer_callback, void *);
+int io_base_remove_timer(struct io_base *, int);
 
 bool io_base_has_watchers(const struct io_base *);
 int io_base_read_events(struct io_base *);

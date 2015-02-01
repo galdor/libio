@@ -33,16 +33,13 @@
 enum io_watcher_type {
     IO_WATCHER_FD,
     IO_WATCHER_SIGNAL,
+    IO_WATCHER_TIMER,
 };
-
-uint64_t io_watcher_key_fd(int);
-uint64_t io_watcher_key_signo(int);
 
 struct io_watcher {
     enum io_watcher_type type;
     uint32_t events; /* enum io_event */
 
-    uint64_t key;
     bool registered;
 
     void *cb_arg;
@@ -61,6 +58,23 @@ struct io_watcher {
             int fd;
 #endif
         } signal;
+
+        struct {
+            int id;
+            io_timer_callback cb;
+
+            uint64_t duration; /* milliseconds */
+            uint32_t flags; /* enum io_timer_flag */
+
+            uint64_t start_time; /* millisecond monotonic clock */
+            uint64_t expiration_time; /* millisecond monotonic clock */
+
+            bool expired;
+
+#ifdef IO_PLATFORM_LINUX
+            int fd;
+#endif
+        } timer;
     } u;
 };
 
@@ -71,23 +85,51 @@ void io_watcher_free_backend(struct io_watcher *);
 
 void io_watcher_on_events(struct io_watcher *, uint32_t);
 
+/* Watcher arrays */
+struct io_watcher_array {
+    struct io_watcher **watchers;
+    size_t nb_watchers;
+    size_t size;
+};
+
+void io_watcher_array_init(struct io_watcher_array *);
+void io_watcher_array_free(struct io_watcher_array *);
+
+void io_watcher_array_add(struct io_watcher_array *, int, struct io_watcher *);
+void io_watcher_array_remove(struct io_watcher_array *, int);
+struct io_watcher *io_watcher_array_get(const struct io_watcher_array *, int);
+
 /* Base */
 struct io_base {
     int fd;
 
-    struct c_hash_table *watchers;
+    struct io_watcher_array fd_watchers;
+    struct io_watcher_array signal_watchers;
+    struct io_watcher_array timer_watchers;
+
+    int last_timer_id;
 };
+
+void io_base_add_fd_watcher(struct io_base *, struct io_watcher *);
+void io_base_remove_fd_watcher(struct io_base *, struct io_watcher *);
+
+void io_base_add_signal_watcher(struct io_base *, struct io_watcher *);
+void io_base_remove_signal_watcher(struct io_base *, struct io_watcher *);
+
+void io_base_add_timer_watcher(struct io_base *, struct io_watcher *);
+void io_base_remove_timer_watcher(struct io_base *, struct io_watcher *);
 
 int io_base_init_backend(struct io_base *);
 void io_base_free_backend(struct io_base *);
 
-int io_base_enable_signal_backend(struct io_base *,
-                                          struct io_watcher *);
-int io_base_disable_signal_backend(struct io_base *,
-                                           struct io_watcher *);
-
 int io_base_enable_fd_backend(struct io_base *, struct io_watcher *);
 int io_base_disable_fd_backend(struct io_base *, struct io_watcher *);
+
+int io_base_enable_signal_backend(struct io_base *, struct io_watcher *);
+int io_base_disable_signal_backend(struct io_base *, struct io_watcher *);
+
+int io_base_enable_timer_backend(struct io_base *, struct io_watcher *);
+int io_base_disable_timer_backend(struct io_base *, struct io_watcher *);
 
 int io_base_read_events_backend(struct io_base *);
 

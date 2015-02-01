@@ -6,5 +6,6 @@ session.vim
 
 /examples/signals
 /examples/stdin
+/examples/timers
 
 /tests/address

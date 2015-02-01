@@ -16,46 +16,40 @@
  */
 
 #include <errno.h>
-#include <signal.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
-
-#include <unistd.h>
 
 #include "io.h"
 
 struct ioex {
     struct io_base *base;
     bool do_exit;
+
+    int64_t timer1;
+    int64_t timer2;
 };
 
 static void ioex_die(const char *, ...)
     __attribute__ ((format(printf, 1, 2), noreturn));
 
-static void ioex_on_signal(int, void *);
-static void ioex_on_stdin_event(int, uint32_t, void *);
+static void ioex_on_timer1(uint64_t, void *);
+static void ioex_on_timer2(uint64_t, void *);
 
 static struct ioex ioex;
 
 int
 main(int argc, char **argv) {
-    uint32_t events;
-    int fd;
-
     ioex.base = io_base_new();
 
-    if (io_base_watch_signal(ioex.base, SIGINT, ioex_on_signal, NULL) == -1)
-        ioex_die("cannot watch signal: %s", c_get_error());
-    if (io_base_watch_signal(ioex.base, SIGTERM, ioex_on_signal, NULL) == -1)
-        ioex_die("cannot watch signal: %s", c_get_error());
+    ioex.timer1 = io_base_add_timer(ioex.base, 1000, IO_TIMER_RECURRENT,
+                                    ioex_on_timer1, NULL);
+    if (!ioex.timer1)
+        ioex_die("cannot add timer: %s", c_get_error());
 
-    fd = STDIN_FILENO;
-    events = IO_EVENT_FD_READ | IO_EVENT_FD_HANGHUP | IO_EVENT_FD_ERROR;
-
-    if (io_base_watch_fd(ioex.base, fd, events,
-                         ioex_on_stdin_event, NULL) == -1) {
-        ioex_die("cannot watch stdin: %s", c_get_error());
-    }
+    ioex.timer2 = io_base_add_timer(ioex.base, 5000, 0, ioex_on_timer2, NULL);
+    if (!ioex.timer2)
+        ioex_die("cannot add timer: %s", c_get_error());
 
     while (!ioex.do_exit && io_base_has_watchers(ioex.base)) {
         if (io_base_read_events(ioex.base) == -1)
@@ -81,30 +75,17 @@ ioex_die(const char *fmt, ...) {
 }
 
 static void
-ioex_on_signal(int signo, void *arg) {
-    printf("signal %d received\n", signo);
+ioex_on_timer1(uint64_t duration, void *arg) {
+    static uint32_t count = 0;
 
-    switch (signo) {
-    case SIGINT:
-    case SIGTERM:
-        ioex.do_exit = true;
-        break;
-    }
+    printf("timer1: %"PRIu64"ms\n", duration);
+
+    if (++count >= 3)
+        io_base_remove_timer(ioex.base, ioex.timer1);
 }
 
 static void
-ioex_on_stdin_event(int fd, uint32_t events, void *arg) {
-    if (events & IO_EVENT_FD_READ) {
-        ssize_t ret;
-        char buf[BUFSIZ];
-
-        ret = read(STDIN_FILENO, buf, BUFSIZ);
-        if (ret == -1)
-            ioex_die("cannot read stdin: %s", strerror(errno));
-
-        printf("%zi bytes read on stdin\n", ret);
-    }
-
-    if (events & IO_EVENT_FD_HANGHUP)
-        ioex.do_exit = true;
+ioex_on_timer2(uint64_t duration, void *arg) {
+    printf("timer2: %"PRIu64"ms\n", duration);
+    io_base_remove_timer(ioex.base, ioex.timer2);
 }

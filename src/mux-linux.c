@@ -19,6 +19,7 @@
 
 #include <sys/epoll.h>
 #include <sys/signalfd.h>
+#include <sys/timerfd.h>
 #include <unistd.h>
 
 #include "internal.h"
@@ -35,6 +36,11 @@ io_watcher_free_backend(struct io_watcher *watcher) {
     case IO_WATCHER_SIGNAL:
         if (watcher->u.signal.fd >= 0)
             close(watcher->u.signal.fd);
+        break;
+
+    case IO_WATCHER_TIMER:
+        if (watcher->u.timer.fd >= 0)
+            close(watcher->u.timer.fd);
         break;
     }
 }
@@ -62,6 +68,60 @@ io_base_free_backend(struct io_base *base) {
 }
 
 int
+io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
+    struct epoll_event event;
+    int fd;
+
+    assert(watcher->type == IO_WATCHER_FD);
+
+    fd = watcher->u.fd.fd;
+
+    memset(&event, 0, sizeof(struct epoll_event));
+    event.events = 0;
+    event.data.ptr = watcher;
+
+    if (watcher->events & IO_EVENT_FD_READ)
+        event.events |= EPOLLIN;
+    if (watcher->events & IO_EVENT_FD_WRITE)
+        event.events |= EPOLLOUT;
+    if (watcher->events & IO_EVENT_FD_HANGHUP)
+        event.events |= EPOLLHUP;
+    if (watcher->events & IO_EVENT_FD_ERROR)
+        event.events |= EPOLLERR;
+
+    if (watcher->registered) {
+        if (epoll_ctl(base->fd, EPOLL_CTL_MOD, fd, &event) == -1) {
+            c_set_error("cannot update fd in epoll instance: %s",
+                        strerror(errno));
+            return -1;
+        }
+
+        return 0;
+    }
+
+    if (epoll_ctl(base->fd, EPOLL_CTL_ADD, fd, &event) == -1) {
+        c_set_error("cannot add fd to epoll instance: %s",
+                    strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+int
+io_base_disable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
+    assert(watcher->type == IO_WATCHER_FD);
+
+    if (epoll_ctl(base->fd, EPOLL_CTL_DEL, watcher->u.fd.fd, NULL) == -1) {
+        c_set_error("cannot remove fd from epoll instance: %s",
+                    strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+int
 io_base_enable_signal_backend(struct io_base *base,
                               struct io_watcher *watcher) {
     struct epoll_event event;
@@ -76,7 +136,7 @@ io_base_enable_signal_backend(struct io_base *base,
     event.events = EPOLLIN;
     event.data.ptr = watcher;
 
-    if (fd >= 0) {
+    if (watcher->registered) {
         if (epoll_ctl(base->fd, EPOLL_CTL_MOD, fd, &event) == -1) {
             c_set_error("cannot update signal fd in epoll instance: %s",
                         strerror(errno));
@@ -138,56 +198,69 @@ io_base_disable_signal_backend(struct io_base *base,
 }
 
 int
-io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
+io_base_enable_timer_backend(struct io_base *base, struct io_watcher *watcher) {
     struct epoll_event event;
+    struct itimerspec its;
+    uint64_t duration, expiration_time;
     int fd;
 
-    assert(watcher->type == IO_WATCHER_FD);
+    assert(watcher->type == IO_WATCHER_TIMER);
+    assert(!watcher->registered);
 
-    fd = watcher->u.fd.fd;
+    fd = watcher->u.timer.fd;
+    duration = watcher->u.timer.duration;
+    expiration_time = watcher->u.timer.expiration_time;
 
-    memset(&event, 0, sizeof(struct epoll_event));
-    event.events = 0;
-    event.data.ptr = watcher;
-
-    if (watcher->events & IO_EVENT_FD_READ)
-        event.events |= EPOLLIN;
-    if (watcher->events & IO_EVENT_FD_WRITE)
-        event.events |= EPOLLOUT;
-    if (watcher->events & IO_EVENT_FD_HANGHUP)
-        event.events |= EPOLLHUP;
-    if (watcher->events & IO_EVENT_FD_ERROR)
-        event.events |= EPOLLERR;
-
-    if (watcher->registered) {
-        if (epoll_ctl(base->fd, EPOLL_CTL_MOD, fd, &event) == -1) {
-            c_set_error("cannot update fd in epoll instance: %s",
-                        strerror(errno));
-            return -1;
-        }
-
-        return 0;
-    }
-
-    if (epoll_ctl(base->fd, EPOLL_CTL_ADD, fd, &event) == -1) {
-        c_set_error("cannot add fd to epoll instance: %s",
-                    strerror(errno));
+    fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    if (fd == -1) {
+        c_set_error("cannot create timer fd: %s", strerror(errno));
         return -1;
     }
 
+    memset(&its, 0, sizeof(struct itimerspec));
+
+    its.it_value.tv_sec = expiration_time / 1000;
+    its.it_value.tv_nsec = (expiration_time % 1000) * 1000000;
+
+    if (watcher->u.timer.flags & IO_TIMER_RECURRENT) {
+        its.it_interval.tv_sec = duration / 1000;
+        its.it_interval.tv_nsec = (duration % 1000) * 1000000;
+    }
+
+    if (timerfd_settime(fd, TFD_TIMER_ABSTIME, &its, NULL) == -1) {
+        c_set_error("cannot arm timer fd: %s", strerror(errno));
+        close(fd);
+        return -1;
+    }
+
+    memset(&event, 0, sizeof(struct epoll_event));
+    event.events = EPOLLIN;
+    event.data.ptr = watcher;
+
+    if (epoll_ctl(base->fd, EPOLL_CTL_ADD, fd, &event) == -1) {
+        c_set_error("cannot add timer fd to epoll instance: %s",
+                    strerror(errno));
+        close(fd);
+        return -1;
+    }
+
+    watcher->u.timer.fd = fd;
     return 0;
 }
 
 int
-io_base_disable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
-    assert(watcher->type == IO_WATCHER_FD);
+io_base_disable_timer_backend(struct io_base *base, struct io_watcher *watcher) {
+    assert(watcher->type == IO_WATCHER_TIMER);
 
-    if (epoll_ctl(base->fd, EPOLL_CTL_DEL, watcher->u.fd.fd, NULL) == -1) {
-        c_set_error("cannot remove fd from epoll instance: %s",
+    if (epoll_ctl(base->fd, EPOLL_CTL_DEL, watcher->u.timer.fd, NULL) == -1) {
+        c_set_error("cannot remove timer fd from epoll instance: %s",
                     strerror(errno));
         return -1;
     }
 
+    close(watcher->u.timer.fd);
+
+    watcher->u.timer.fd = -1;
     return 0;
 }
 
@@ -242,6 +315,24 @@ io_base_read_events_backend(struct io_base *base) {
             }
 
             events |= IO_EVENT_SIGNAL_RECEIVED;
+        }
+        break;
+
+    case IO_WATCHER_TIMER:
+        if (event.events & EPOLLIN) {
+            uint64_t nb_expirations;
+            ssize_t ret;
+
+            ret = read(watcher->u.timer.fd, &nb_expirations, 8);
+            if (ret == -1) {
+                c_set_error("cannot read timer fd: %s", strerror(errno));
+                return -1;
+            } else if ((size_t)ret < 8) {
+                c_set_error("read truncated data on timer fd");
+                return -1;
+            }
+
+            events |= IO_EVENT_TIMER_EXPIRED;
         }
         break;
     }
