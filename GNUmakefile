@@ -130,6 +130,6 @@ uninstall:
 	#$(RM) $(addprefix $(bindir)/,$(utils_BIN))
 
 tags:
-	ctags -o .tags -a $(wildcard src/*.[hc])
+	ctags -w -f .tags -a $(wildcard src/*.[hc])
 
 .PHONY: all lib tests utils examples doc clean coverage install uninstall tags
