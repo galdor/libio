@@ -326,6 +326,15 @@ io_base_read_events_backend(struct io_base *base) {
         return 0;
 
     io_watcher_on_events(watcher, events);
+
+    if (watcher->type == IO_WATCHER_TIMER
+     && (watcher->u.timer.flags & IO_TIMER_RECURRENT)) {
+        if (io_read_monotonic_clock_ms(&watcher->u.timer.start_time) == -1) {
+            c_set_error("cannot read monotonic clock: %s", c_get_error());
+            return -1;
+        }
+    }
+
     return 0;
 }
 
