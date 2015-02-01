@@ -100,9 +100,10 @@ io_watcher_array_add(struct io_watcher_array *array, int id,
     size_t nsize;
 
     assert(id >= 0);
+    assert((size_t)id < (SIZE_MAX / 3) * 2);
 
     if ((size_t)id >= array->size) {
-        nsize = (array->size * 3) / 2;
+        nsize = (array->size / 2) * 3;
         if ((size_t)id >= nsize)
             nsize = (size_t)id + 1;
 
