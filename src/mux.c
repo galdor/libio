@@ -91,7 +91,7 @@ io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
             watcher->u.timer.expired = true;
 
             watcher->in_callback = true;
-            watcher->u.timer.cb(duration, watcher->cb_arg);
+            watcher->u.timer.cb(id, duration, watcher->cb_arg);
             watcher->in_callback = false;
         }
 

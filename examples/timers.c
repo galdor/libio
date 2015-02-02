@@ -33,8 +33,8 @@ struct ioex {
 static void ioex_die(const char *, ...)
     __attribute__ ((format(printf, 1, 2), noreturn));
 
-static void ioex_on_timer1(uint64_t, void *);
-static void ioex_on_timer2(uint64_t, void *);
+static void ioex_on_timer1(int, uint64_t, void *);
+static void ioex_on_timer2(int, uint64_t, void *);
 
 static struct ioex ioex;
 
@@ -75,7 +75,7 @@ ioex_die(const char *fmt, ...) {
 }
 
 static void
-ioex_on_timer1(uint64_t duration, void *arg) {
+ioex_on_timer1(int id, uint64_t duration, void *arg) {
     static uint32_t count = 0;
 
     printf("timer 1: %"PRIu64"ms\n", duration);
@@ -87,7 +87,7 @@ ioex_on_timer1(uint64_t duration, void *arg) {
 }
 
 static void
-ioex_on_timer2(uint64_t duration, void *arg) {
+ioex_on_timer2(int id, uint64_t duration, void *arg) {
     printf("timer 2: %"PRIu64"ms\n", duration);
 
     if (io_base_remove_timer(ioex.base, ioex.timer2) == -1)

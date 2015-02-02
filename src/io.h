@@ -85,7 +85,7 @@ enum io_event {
 
 typedef void (*io_signal_callback)(int, void *);
 typedef void (*io_fd_callback)(int, uint32_t, void *);
-typedef void (*io_timer_callback)(uint64_t, void *);
+typedef void (*io_timer_callback)(int, uint64_t, void *);
 
 struct io_base *io_base_new(void);
 void io_base_delete(struct io_base *);
