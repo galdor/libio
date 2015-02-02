@@ -211,7 +211,9 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
         return 0;
     }
 
-    if (!watcher) {
+    if (watcher) {
+        is_new = false;
+    } else {
         is_new = true;
 
         watcher = io_watcher_new(IO_WATCHER_FD);
