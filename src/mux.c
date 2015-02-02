@@ -237,20 +237,30 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
                  io_fd_callback cb, void *arg) {
     struct io_watcher *watcher;
     bool is_new;
+    uint32_t old_events;
+    io_fd_callback old_cb;
+    void *old_cb_arg;
 
     assert(fd >= 0);
 
     watcher = io_watcher_array_get(&base->fd_watchers, fd);
 
-    if (watcher
-     && watcher->events == events
-     && watcher->cb_arg == arg
-     && watcher->u.fd.cb == cb) {
-        return 0;
-    }
-
     if (watcher) {
         is_new = false;
+
+        if (watcher->events == events
+         && watcher->cb_arg == arg
+         && watcher->u.fd.cb == cb) {
+            return 0;
+        }
+
+        old_events = watcher->events;
+        old_cb_arg = watcher->cb_arg;
+        old_cb = watcher->u.fd.cb;
+
+        watcher->events = events;
+        watcher->cb_arg = arg;
+        watcher->u.fd.cb = cb;
     } else {
         is_new = true;
 
@@ -266,6 +276,10 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
     if (io_base_enable_fd_backend(base, watcher) == -1) {
         if (is_new)
             io_watcher_delete(watcher);
+
+        watcher->events = old_events;
+        watcher->cb_arg = old_cb_arg;
+        watcher->u.fd.cb = old_cb;
         return -1;
     }
 

@@ -77,7 +77,6 @@ io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
     fd = watcher->u.fd.fd;
 
     memset(&event, 0, sizeof(struct epoll_event));
-    event.events = 0;
     event.data.ptr = watcher;
 
     if (watcher->events & IO_EVENT_FD_READ)
