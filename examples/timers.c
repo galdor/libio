@@ -44,11 +44,11 @@ main(int argc, char **argv) {
 
     ioex.timer1 = io_base_add_timer(ioex.base, 1000, IO_TIMER_RECURRENT,
                                     ioex_on_timer1, NULL);
-    if (!ioex.timer1)
+    if (ioex.timer1 == -1)
         ioex_die("cannot add timer: %s", c_get_error());
 
     ioex.timer2 = io_base_add_timer(ioex.base, 5000, 0, ioex_on_timer2, NULL);
-    if (!ioex.timer2)
+    if (ioex.timer2 == -1)
         ioex_die("cannot add timer: %s", c_get_error());
 
     while (!ioex.do_exit && io_base_has_watchers(ioex.base)) {

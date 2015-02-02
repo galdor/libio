@@ -109,18 +109,9 @@ struct io_base {
     struct io_watcher_array fd_watchers;
     struct io_watcher_array signal_watchers;
     struct io_watcher_array timer_watchers;
-
-    int last_timer_id;
 };
 
-void io_base_add_fd_watcher(struct io_base *, struct io_watcher *);
-void io_base_remove_fd_watcher(struct io_base *, struct io_watcher *);
-
-void io_base_add_signal_watcher(struct io_base *, struct io_watcher *);
-void io_base_remove_signal_watcher(struct io_base *, struct io_watcher *);
-
-void io_base_add_timer_watcher(struct io_base *, struct io_watcher *);
-void io_base_remove_timer_watcher(struct io_base *, struct io_watcher *);
+int io_base_next_timer_id(struct io_base *);
 
 int io_base_init_backend(struct io_base *);
 void io_base_free_backend(struct io_base *);

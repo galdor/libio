@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <limits.h>
+
 #include <unistd.h>
 
 #include "internal.h"
@@ -384,7 +386,9 @@ io_base_add_timer(struct io_base *base, uint64_t duration, uint32_t flags,
         return -1;
     }
 
-    id = ++base->last_timer_id;
+    id = io_base_next_timer_id(base);
+    if (id == -1)
+        return -1;
 
     watcher = io_watcher_new(base, IO_WATCHER_TIMER);
 
@@ -443,4 +447,24 @@ io_base_read_events(struct io_base *base) {
         return -1;
 
     return 0;
+}
+
+int
+io_base_next_timer_id(struct io_base *base) {
+    struct io_watcher_array *timers;
+    size_t i;
+
+    timers = &base->timer_watchers;
+
+    for (i = 0; i < timers->nb_watchers; i++) {
+        if (!timers->watchers[i])
+            return (int)i;
+    }
+
+    if (i > (size_t)INT_MAX) {
+        c_set_error("too many timers");
+        return -1;
+    }
+
+    return (int)i;
 }
