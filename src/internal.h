@@ -37,10 +37,14 @@ enum io_watcher_type {
 };
 
 struct io_watcher {
+    struct io_base *base;
+
     enum io_watcher_type type;
     uint32_t events; /* enum io_event */
 
     bool registered;
+    bool enabled;
+    bool in_callback;
 
     void *cb_arg;
 
@@ -77,12 +81,12 @@ struct io_watcher {
     } u;
 };
 
-struct io_watcher *io_watcher_new(enum io_watcher_type);
+struct io_watcher *io_watcher_new(struct io_base *, enum io_watcher_type);
 void io_watcher_delete(struct io_watcher *);
 
 void io_watcher_free_backend(struct io_watcher *);
 
-void io_watcher_on_events(struct io_watcher *, uint32_t);
+int io_watcher_on_events(struct io_watcher *, uint32_t);
 
 /* Watcher arrays */
 struct io_watcher_array {

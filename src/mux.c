@@ -23,11 +23,12 @@
  *  Watcher
  * ------------------------------------------------------------------------ */
 struct io_watcher *
-io_watcher_new(enum io_watcher_type type) {
+io_watcher_new(struct io_base *base, enum io_watcher_type type) {
     struct io_watcher *watcher;
 
     watcher = c_malloc0(sizeof(struct io_watcher));
 
+    watcher->base = base;
     watcher->type = type;
 
     return watcher;
@@ -43,20 +44,39 @@ io_watcher_delete(struct io_watcher *watcher) {
     c_free0(watcher, sizeof(struct io_watcher));
 }
 
-void
+int
 io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
+    struct io_watcher_array *array;
+    bool is_recurrent;
+    int id;
+
     switch (watcher->type) {
     case IO_WATCHER_FD:
+        array = &watcher->base->fd_watchers;
+        id = watcher->u.fd.fd;
+
+        watcher->in_callback = true;
         if (watcher->u.fd.cb)
             watcher->u.fd.cb(watcher->u.fd.fd, events, watcher->cb_arg);
+        watcher->in_callback = false;
         break;
 
     case IO_WATCHER_SIGNAL:
+        array = &watcher->base->signal_watchers;
+        id = watcher->u.signal.signo;
+
+        watcher->in_callback = true;
         if (watcher->u.signal.cb)
             watcher->u.signal.cb(watcher->u.signal.signo, watcher->cb_arg);
+        watcher->in_callback = false;
         break;
 
     case IO_WATCHER_TIMER:
+        array = &watcher->base->timer_watchers;
+        id = watcher->u.timer.id;
+
+        is_recurrent = (watcher->u.timer.flags & IO_TIMER_RECURRENT);
+
         if (watcher->u.timer.cb) {
             uint64_t now, duration;
 
@@ -67,10 +87,28 @@ io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
             }
 
             watcher->u.timer.expired = true;
+
+            watcher->in_callback = true;
             watcher->u.timer.cb(duration, watcher->cb_arg);
+            watcher->in_callback = false;
+        }
+
+        if (watcher->enabled && is_recurrent) {
+            if (io_read_monotonic_clock_ms(&watcher->u.timer.start_time) == -1) {
+                c_set_error("cannot read monotonic clock: %s", c_get_error());
+                return -1;
+            }
         }
         break;
     }
+
+    if (!watcher->enabled) {
+        /* The watcher was disabled in the callback */
+        io_watcher_array_remove(array, id);
+        io_watcher_delete(watcher);
+    }
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------------
@@ -216,7 +254,7 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
     } else {
         is_new = true;
 
-        watcher = io_watcher_new(IO_WATCHER_FD);
+        watcher = io_watcher_new(base, IO_WATCHER_FD);
 
         watcher->events = events;
         watcher->cb_arg = arg;
@@ -235,6 +273,8 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
         watcher->registered = true;
         io_watcher_array_add(&base->fd_watchers, fd, watcher);
     }
+
+    watcher->enabled = true;
     return 0;
 }
 
@@ -253,8 +293,11 @@ io_base_unwatch_fd(struct io_base *base, int fd) {
     if (io_base_disable_fd_backend(base, watcher) == -1)
         return -1;
 
-    io_watcher_array_remove(&base->fd_watchers, fd);
-    io_watcher_delete(watcher);
+    watcher->enabled = false;
+    if (!watcher->in_callback) {
+        io_watcher_array_remove(&base->fd_watchers, fd);
+        io_watcher_delete(watcher);
+    }
     return 0;
 }
 
@@ -272,7 +315,7 @@ io_base_watch_signal(struct io_base *base, int signo,
         return 0;
     }
 
-    watcher = io_watcher_new(IO_WATCHER_SIGNAL);
+    watcher = io_watcher_new(base, IO_WATCHER_SIGNAL);
 
     watcher->events = IO_EVENT_SIGNAL_RECEIVED;
     watcher->cb_arg = arg;
@@ -286,6 +329,8 @@ io_base_watch_signal(struct io_base *base, int signo,
     }
 
     watcher->registered = true;
+    watcher->enabled = true;
+
     io_watcher_array_add(&base->signal_watchers, signo, watcher);
     return 0;
 }
@@ -305,8 +350,11 @@ io_base_unwatch_signal(struct io_base *base, int signo) {
     if (io_base_disable_signal_backend(base, watcher) == -1)
         return -1;
 
-    io_watcher_array_remove(&base->signal_watchers, signo);
-    io_watcher_delete(watcher);
+    watcher->enabled = false;
+    if (!watcher->in_callback) {
+        io_watcher_array_remove(&base->signal_watchers, signo);
+        io_watcher_delete(watcher);
+    }
     return 0;
 }
 
@@ -324,7 +372,7 @@ io_base_add_timer(struct io_base *base, uint64_t duration, uint32_t flags,
 
     id = ++base->last_timer_id;
 
-    watcher = io_watcher_new(IO_WATCHER_TIMER);
+    watcher = io_watcher_new(base, IO_WATCHER_TIMER);
 
     watcher->events = IO_EVENT_TIMER_EXPIRED;
     watcher->cb_arg = arg;
@@ -341,6 +389,8 @@ io_base_add_timer(struct io_base *base, uint64_t duration, uint32_t flags,
     }
 
     watcher->registered = true;
+    watcher->enabled = true;
+
     io_watcher_array_add(&base->timer_watchers, id, watcher);
     return id;
 }
@@ -358,8 +408,11 @@ io_base_remove_timer(struct io_base *base, int id) {
     if (io_base_disable_timer_backend(base, watcher) == -1)
         return -1;
 
-    io_watcher_array_remove(&base->timer_watchers, id);
-    io_watcher_delete(watcher);
+    watcher->enabled = false;
+    if (!watcher->in_callback) {
+        io_watcher_array_remove(&base->timer_watchers, id);
+        io_watcher_delete(watcher);
+    }
     return 0;
 }
 

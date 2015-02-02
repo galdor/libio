@@ -95,7 +95,7 @@ struct io_watcher *
 iot_watcher_new_dummy(int value) {
     struct io_watcher *watcher;
 
-    watcher = io_watcher_new(IO_WATCHER_FD);
+    watcher = io_watcher_new(NULL, IO_WATCHER_FD);
     watcher->u.fd.fd = value;
 
     return watcher;
