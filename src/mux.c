@@ -107,6 +107,9 @@ io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
     if (!watcher->enabled) {
         /* The watcher was disabled in the callback */
         io_watcher_array_remove(array, id);
+        if (watcher->type == IO_WATCHER_TIMER)
+            io_base_release_timer_id(watcher->base, watcher->u.timer.id);
+
         io_watcher_delete(watcher);
     }
 
@@ -202,6 +205,8 @@ io_watcher_array_get(const struct io_watcher_array *array, int id) {
 /* ------------------------------------------------------------------------
  *  Base
  * ------------------------------------------------------------------------ */
+static int io_cmp_timer_ids(const void *, const void *);
+
 struct io_base *
 io_base_new(void) {
     struct io_base *base;
@@ -217,6 +222,8 @@ io_base_new(void) {
     io_watcher_array_init(&base->signal_watchers);
     io_watcher_array_init(&base->timer_watchers);
 
+    base->free_timer_ids = c_heap_new(io_cmp_timer_ids);
+
     return base;
 }
 
@@ -228,6 +235,8 @@ io_base_delete(struct io_base *base) {
     io_watcher_array_free(&base->fd_watchers);
     io_watcher_array_free(&base->signal_watchers);
     io_watcher_array_free(&base->timer_watchers);
+
+    c_heap_delete(base->free_timer_ids);
 
     io_base_free_backend(base);
 
@@ -386,7 +395,7 @@ io_base_add_timer(struct io_base *base, uint64_t duration, uint32_t flags,
         return -1;
     }
 
-    id = io_base_next_timer_id(base);
+    id = io_base_generate_timer_id(base);
     if (id == -1)
         return -1;
 
@@ -402,6 +411,8 @@ io_base_add_timer(struct io_base *base, uint64_t duration, uint32_t flags,
     watcher->u.timer.cb = cb;
 
     if (io_base_enable_timer_backend(base, watcher) == -1) {
+        io_base_release_timer_id(base, id);
+
         io_watcher_delete(watcher);
         return -1;
     }
@@ -429,6 +440,8 @@ io_base_remove_timer(struct io_base *base, int id) {
     watcher->enabled = false;
     if (!watcher->in_callback) {
         io_watcher_array_remove(&base->timer_watchers, id);
+        io_base_release_timer_id(base, id);
+
         io_watcher_delete(watcher);
     }
     return 0;
@@ -450,21 +463,42 @@ io_base_read_events(struct io_base *base) {
 }
 
 int
-io_base_next_timer_id(struct io_base *base) {
-    struct io_watcher_array *timers;
-    size_t i;
+io_base_generate_timer_id(struct io_base *base) {
+    if (c_heap_is_empty(base->free_timer_ids)) {
+        if (base->last_timer_id == INT_MAX) {
+            c_set_error("too many timers");
+            return -1;
+        }
 
-    timers = &base->timer_watchers;
-
-    for (i = 0; i < timers->nb_watchers; i++) {
-        if (!timers->watchers[i])
-            return (int)i;
+        return ++base->last_timer_id;
     }
 
-    if (i > (size_t)INT_MAX) {
-        c_set_error("too many timers");
+    return C_POINTER_TO_INT32(c_heap_pop(base->free_timer_ids));
+}
+
+void
+io_base_release_timer_id(struct io_base *base, int id) {
+    assert(id > 0);
+
+    if (id == base->last_timer_id) {
+        base->last_timer_id--;
+    } else {
+        c_heap_add(base->free_timer_ids, C_INT32_TO_POINTER(id));
+    }
+}
+
+static int
+io_cmp_timer_ids(const void *e1, const void *e2) {
+    int id1, id2;
+
+    id1 = C_POINTER_TO_INT32(e1);
+    id2 = C_POINTER_TO_INT32(e2);
+
+    if (id1 < id2) {
         return -1;
+    } else if (id1 > id2) {
+        return 1;
+    } else {
+        return 0;
     }
-
-    return (int)i;
 }

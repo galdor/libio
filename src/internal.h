@@ -109,9 +109,13 @@ struct io_base {
     struct io_watcher_array fd_watchers;
     struct io_watcher_array signal_watchers;
     struct io_watcher_array timer_watchers;
+
+    int last_timer_id;
+    struct c_heap *free_timer_ids;
 };
 
-int io_base_next_timer_id(struct io_base *);
+int io_base_generate_timer_id(struct io_base *);
+void io_base_release_timer_id(struct io_base *, int);
 
 int io_base_init_backend(struct io_base *);
 void io_base_free_backend(struct io_base *);
