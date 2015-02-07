@@ -4,6 +4,7 @@
 session.vim
 .tags
 
+/examples/base-polling
 /examples/signals
 /examples/stdin
 /examples/timers
