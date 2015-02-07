@@ -81,7 +81,7 @@ ioex_on_signal(int signo, void *arg) {
 
     base = arg;
 
-    printf("signal %d received", signo);
+    printf("signal %d received\n", signo);
 
     switch (signo) {
     case SIGINT:
