@@ -90,6 +90,8 @@ typedef void (*io_timer_callback)(int, uint64_t, void *);
 struct io_base *io_base_new(void);
 void io_base_delete(struct io_base *);
 
+int io_base_fd(const struct io_base *);
+
 int io_base_watch_fd(struct io_base *, int, uint32_t, io_fd_callback, void *);
 int io_base_unwatch_fd(struct io_base *, int);
 

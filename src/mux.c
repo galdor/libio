@@ -244,6 +244,11 @@ io_base_delete(struct io_base *base) {
 }
 
 int
+io_base_fd(const struct io_base *base) {
+    return base->fd;
+}
+
+int
 io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
                  io_fd_callback cb, void *arg) {
     struct io_watcher *watcher;
