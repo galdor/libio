@@ -109,9 +109,21 @@ int io_base_read_events(struct io_base *);
  *  Messaging protocol
  * ------------------------------------------------------------------------ */
 /* Message */
+struct io_mp_msg;
+
+enum io_mp_msg_type {
+    IO_MP_MSG_TYPE_UNUSED       = 0,
+    IO_MP_MSG_TYPE_NOTIFICATION = 1,
+    IO_MP_MSG_TYPE_REQUEST      = 2,
+    IO_MP_MSG_TYPE_RESPONSE     = 3,
+};
+
 enum io_mp_msg_flag {
     IO_MP_MSG_FLAG_DEFAULT = 0,
 };
+
+uint32_t io_mp_msg_id(const struct io_mp_msg *);
+const void *io_mp_msg_payload(const struct io_mp_msg *, size_t *);
 
 /* Connection */
 struct io_mp_connection;
@@ -127,6 +139,9 @@ typedef void (*io_mp_connection_event_callback)(struct io_mp_connection *,
                                                 enum io_mp_connection_event,
                                                 void *);
 
+typedef void (*io_mp_msg_callback)(struct io_mp_connection *,
+                                   const struct io_mp_msg *, void *);
+
 struct io_mp_client *io_mp_connection_client(const struct io_mp_connection *);
 struct io_mp_server *io_mp_connection_server(const struct io_mp_connection *);
 
@@ -135,10 +150,11 @@ int io_mp_connection_send_notification(struct io_mp_connection *,
                                        const void *, size_t);
 int io_mp_connection_send_request(struct io_mp_connection *,
                                   uint8_t, uint8_t,
-                                  const void *, size_t);
+                                  const void *, size_t,
+                                  io_mp_msg_callback, void *);
 int io_mp_connection_send_response(struct io_mp_connection *,
-                                   uint8_t, uint8_t,
-                                   uint32_t, const void *, size_t);
+                                   const struct io_mp_msg *, uint8_t,
+                                   const void *, size_t);
 
 /* Client */
 struct io_mp_client;
@@ -156,6 +172,10 @@ void io_mp_client_set_event_callback(struct io_mp_client *,
 int io_mp_client_connect(struct io_mp_client *, const char *, uint16_t);
 void io_mp_client_disconnect(struct io_mp_client *);
 
+void io_mp_client_bind_op(struct io_mp_client *, uint8_t, enum io_mp_msg_type,
+                          io_mp_msg_callback, void *);
+void io_mp_client_unbind_op(struct io_mp_client *, uint8_t);
+
 /* Server */
 struct io_mp_server;
 
@@ -169,5 +189,9 @@ void io_mp_server_set_event_callback(struct io_mp_server *,
                                      io_mp_connection_event_callback);
 
 int io_mp_server_listen(struct io_mp_server *, const char *, uint16_t);
+
+void io_mp_server_bind_op(struct io_mp_server *, uint8_t, enum io_mp_msg_type,
+                          io_mp_msg_callback, void *);
+void io_mp_server_unbind_op(struct io_mp_server *, uint8_t);
 
 #endif

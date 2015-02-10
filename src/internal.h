@@ -139,13 +139,6 @@ int io_base_read_events_backend(struct io_base *);
 /* Message */
 #define IO_MP_MSG_HEADER_SZ 12 /* bytes */
 
-enum io_mp_msg_type {
-    IO_MP_MSG_TYPE_UNUSED       = 0,
-    IO_MP_MSG_TYPE_NOTIFICATION = 1,
-    IO_MP_MSG_TYPE_REQUEST      = 2,
-    IO_MP_MSG_TYPE_RESPONSE     = 3,
-};
-
 struct io_mp_msg {
     uint8_t op;
     uint8_t type    :  2; /* enum io_mp_msg_type */
@@ -167,6 +160,48 @@ void io_mp_msg_delete(struct io_mp_msg *);
 
 int io_mp_msg_decode(struct io_mp_msg *, const void *, size_t, size_t *);
 void io_mp_msg_encode(const struct io_mp_msg *, struct c_buffer *);
+
+/* Message callback */
+struct io_mp_msg_callback_info {
+    enum io_mp_msg_type msg_type;
+
+    io_mp_msg_callback cb;
+    void *cb_arg;
+};
+
+struct io_mp_msg_callback_info *
+io_mp_msg_callback_info_new(enum io_mp_msg_type, io_mp_msg_callback, void *);
+void io_mp_msg_callback_info_delete(struct io_mp_msg_callback_info *);
+
+/* Message handler */
+struct io_mp_msg_handler {
+    struct c_hash_table *callbacks; /* op -> callback_info */
+};
+
+struct io_mp_msg_handler *io_mp_msg_handler_new(void);
+void io_mp_msg_handler_delete(struct io_mp_msg_handler *);
+
+void io_mp_msg_handler_bind_op(struct io_mp_msg_handler *,
+                               uint8_t, enum io_mp_msg_type,
+                               io_mp_msg_callback, void *);
+void io_mp_msg_handler_unbind_op(struct io_mp_msg_handler *, uint8_t);
+
+/* Response handler */
+struct io_mp_response_handler {
+    struct c_hash_table *callbacks; /* msg id -> callback_info */
+};
+
+struct io_mp_response_handler *io_mp_response_handler_new(void);
+void io_mp_response_handler_delete(struct io_mp_response_handler *);
+
+int io_mp_response_handler_add_callback(struct io_mp_response_handler *,
+                                        uint32_t,
+                                        io_mp_msg_callback, void *);
+void io_mp_response_handler_remove_callback(struct io_mp_response_handler *,
+                                            uint32_t);
+struct io_mp_msg_callback_info *
+io_mp_response_handler_get_callback(const struct io_mp_response_handler *,
+                                    uint32_t);
 
 /* Connections */
 enum io_mp_connection_type {
@@ -190,6 +225,8 @@ struct io_mp_connection {
 
     uint32_t last_msg_id;
 
+    struct io_mp_response_handler *response_handler;
+
     union {
         struct {
             struct io_mp_client *client;
@@ -207,6 +244,9 @@ struct io_mp_connection *io_mp_connection_new_client(struct io_mp_client *,
 struct io_mp_connection *io_mp_connection_new_server(struct io_mp_listener *);
 void io_mp_connection_delete(struct io_mp_connection *);
 
+struct io_mp_msg_handler *
+io_mp_connection_msg_handler(const struct io_mp_connection *);
+
 int io_mp_connection_get_socket_error(struct io_mp_connection *, int *);
 
 void io_mp_connection_trace(struct io_mp_connection *, const char *, ...)
@@ -221,6 +261,13 @@ int io_mp_connection_send_msg(struct io_mp_connection *,
 void io_mp_connection_on_event(int, uint32_t, void *);
 int io_mp_connection_on_event_read(struct io_mp_connection *);
 int io_mp_connection_on_event_write(struct io_mp_connection *);
+
+int io_mp_connection_process_msg(struct io_mp_connection *,
+                                 const struct io_mp_msg *);
+int io_mp_connection_process_notification_request(struct io_mp_connection *,
+                                                  const struct io_mp_msg *);
+int io_mp_connection_process_response(struct io_mp_connection *,
+                                      const struct io_mp_msg *);
 
 /* Client */
 enum io_mp_client_state {
@@ -238,6 +285,8 @@ struct io_mp_client {
 
     void *private_data;
     io_mp_connection_event_callback event_callback;
+
+    struct io_mp_msg_handler *msg_handler;
 };
 
 void io_mp_client_signal_event(struct io_mp_client *,
@@ -281,6 +330,8 @@ struct io_mp_server {
 
     void *private_data;
     io_mp_connection_event_callback event_callback;
+
+    struct io_mp_msg_handler *msg_handler;
 };
 
 void io_mp_server_signal_event(struct io_mp_server *,

@@ -35,6 +35,11 @@ static void ioex_on_signal(int, void *);
 static void ioex_on_server_event(struct io_mp_connection *,
                                  enum io_mp_connection_event, void *);
 
+static void ioex_on_notification_string(struct io_mp_connection *,
+                                        const struct io_mp_msg *, void *);
+static void ioex_on_request_random(struct io_mp_connection *,
+                                   const struct io_mp_msg *, void *);
+
 struct ioex ioex;
 
 int
@@ -55,6 +60,11 @@ main(int argc, char **argv) {
     ioex.server = io_mp_server_new(ioex.base);
 
     io_mp_server_set_event_callback(ioex.server, ioex_on_server_event);
+
+    io_mp_server_bind_op(ioex.server, 1, IO_MP_MSG_TYPE_NOTIFICATION,
+                         ioex_on_notification_string, NULL);
+    io_mp_server_bind_op(ioex.server, 2, IO_MP_MSG_TYPE_REQUEST,
+                         ioex_on_request_random, NULL);
 
     if (io_mp_server_listen(ioex.server, iface, port) == -1) {
         ioex_die("cannot listen on interface %s port %u: %s",
@@ -122,5 +132,34 @@ ioex_on_server_event(struct io_mp_connection *connection,
     case IO_MP_CONNECTION_EVENT_LOST:
         printf("connection lost\n");
         break;
+    }
+}
+
+static void
+ioex_on_notification_string(struct io_mp_connection *connection,
+                            const struct io_mp_msg *msg, void *arg) {
+    const char *string;
+
+    string = io_mp_msg_payload(msg, NULL);
+
+    printf("string: %s\n", string);
+}
+
+static void
+ioex_on_request_random(struct io_mp_connection *connection,
+                       const struct io_mp_msg *msg, void *arg) {
+    uint32_t number;
+    uint8_t payload[4];
+
+    number = (uint32_t)(random() % UINT32_MAX);
+
+    payload[0] = (number & 0xff000000) >> 24;
+    payload[1] = (number & 0x00ff0000) >> 16;
+    payload[2] = (number & 0x0000ff00) >>  8;
+    payload[3] =  number & 0x000000ff;
+
+    if (io_mp_connection_send_response(connection,
+                                       msg, IO_MP_MSG_FLAG_DEFAULT,
+                                       payload, sizeof(payload)) == -1) {
     }
 }

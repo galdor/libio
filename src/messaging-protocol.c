@@ -65,6 +65,19 @@ io_mp_msg_delete(struct io_mp_msg *msg) {
     c_free(msg);
 }
 
+uint32_t
+io_mp_msg_id(const struct io_mp_msg *msg) {
+    return msg->id;
+}
+
+const void *
+io_mp_msg_payload(const struct io_mp_msg *msg, size_t *psz) {
+    if (psz)
+        *psz = msg->payload_sz;
+
+    return msg->payload;
+}
+
 int
 io_mp_msg_decode(struct io_mp_msg *msg, const void *data, size_t sz,
                  size_t *psz) {
@@ -100,6 +113,9 @@ io_mp_msg_decode(struct io_mp_msg *msg, const void *data, size_t sz,
 
     msg->owns_payload = false;
 
+    ptr += msg->payload_sz;
+    len -= msg->payload_sz;
+
     if (psz)
         *psz = sz - len;
     return 1;
@@ -120,9 +136,183 @@ io_mp_msg_encode(const struct io_mp_msg *msg, struct c_buffer *buf) {
     io_mp_write_u32(msg->payload_sz, ptr + 4);
     io_mp_write_u32(msg->id, ptr + 8);
 
-    memcpy(ptr + IO_MP_MSG_HEADER_SZ, msg->payload, msg->payload_sz);
+    if (msg->payload_sz > 0)
+        memcpy(ptr + IO_MP_MSG_HEADER_SZ, msg->payload, msg->payload_sz);
 
     c_buffer_increase_length(buf, msg_sz);
+}
+
+/* ------------------------------------------------------------------------
+ *  Message callback
+ * ------------------------------------------------------------------------ */
+struct io_mp_msg_callback_info *
+io_mp_msg_callback_info_new(enum io_mp_msg_type msg_type,
+                            io_mp_msg_callback cb, void *cb_arg) {
+    struct io_mp_msg_callback_info *info;
+
+    info = c_malloc0(sizeof(struct io_mp_msg_callback_info));
+
+    info->msg_type = msg_type;
+
+    info->cb = cb;
+    info->cb_arg = cb_arg;
+
+    return info;
+}
+
+void
+io_mp_msg_callback_info_delete(struct io_mp_msg_callback_info *info) {
+    if (!info)
+        return;
+
+    c_free0(info, sizeof(struct io_mp_msg_callback_info));
+}
+
+/* ------------------------------------------------------------------------
+ *  Message handler
+ * ------------------------------------------------------------------------ */
+struct io_mp_msg_handler *
+io_mp_msg_handler_new(void) {
+    struct io_mp_msg_handler *handler;
+
+    handler = c_malloc0(sizeof(struct io_mp_msg_handler));
+
+    handler->callbacks = c_hash_table_new(c_hash_int32, c_equal_int32);
+
+    return handler;
+}
+
+void
+io_mp_msg_handler_delete(struct io_mp_msg_handler *handler) {
+    struct c_hash_table_iterator *it;
+    struct io_mp_msg_callback_info *info;
+
+    if (!handler)
+        return;
+
+    it = c_hash_table_iterate(handler->callbacks);
+    while (c_hash_table_iterator_next(it, NULL, (void **)&info) == 1) {
+        io_mp_msg_callback_info_delete(info);
+    }
+    c_hash_table_iterator_delete(it);
+    c_hash_table_delete(handler->callbacks);
+
+    c_free0(handler, sizeof(struct io_mp_msg_handler));
+}
+
+void
+io_mp_msg_handler_bind_op(struct io_mp_msg_handler *handler,
+                          uint8_t op, enum io_mp_msg_type type,
+                          io_mp_msg_callback cb, void *cb_arg) {
+    struct io_mp_msg_callback_info *info, *old;
+
+    info = io_mp_msg_callback_info_new(type, cb, cb_arg);
+
+    if (c_hash_table_insert2(handler->callbacks, C_INT32_TO_POINTER(op), info,
+                             NULL, (void **)&old) == 0) {
+        io_mp_msg_callback_info_delete(old);
+    }
+}
+
+void
+io_mp_msg_handler_unbind_op(struct io_mp_msg_handler *handler,
+                            uint8_t op) {
+    struct io_mp_msg_callback_info *info;
+
+    if (c_hash_table_remove2(handler->callbacks, C_INT32_TO_POINTER(op),
+                             NULL, (void **)&info) == 1) {
+        io_mp_msg_callback_info_delete(info);
+    }
+}
+
+struct io_mp_msg_callback_info *
+io_mp_msg_handler_get_callback(const struct io_mp_msg_handler *handler,
+                               uint8_t op) {
+    struct io_mp_msg_callback_info *info;
+
+    if (c_hash_table_get(handler->callbacks, C_INT32_TO_POINTER(op),
+                         (void **)&info) == 0) {
+        return NULL;
+    }
+
+    return info;
+}
+
+/* ------------------------------------------------------------------------
+ *  Response handler
+ * ------------------------------------------------------------------------ */
+struct io_mp_response_handler *
+io_mp_response_handler_new(void) {
+    struct io_mp_response_handler *handler;
+
+    handler = c_malloc0(sizeof(struct io_mp_response_handler));
+
+    handler->callbacks = c_hash_table_new(c_hash_int32, c_equal_int32);
+
+    return handler;
+}
+
+void
+io_mp_response_handler_delete(struct io_mp_response_handler *handler) {
+    struct c_hash_table_iterator *it;
+    struct io_mp_msg_callback_info *info;
+
+    if (!handler)
+        return;
+
+    it = c_hash_table_iterate(handler->callbacks);
+    while (c_hash_table_iterator_next(it, NULL, (void **)&info) == 1) {
+        io_mp_msg_callback_info_delete(info);
+    }
+    c_hash_table_iterator_delete(it);
+    c_hash_table_delete(handler->callbacks);
+
+    c_free0(handler, sizeof(struct io_mp_response_handler));
+}
+
+int
+io_mp_response_handler_add_callback(struct io_mp_response_handler *handler,
+                                    uint32_t id,
+                                    io_mp_msg_callback cb, void *cb_arg) {
+    struct io_mp_msg_callback_info *info;
+
+    if (c_hash_table_contains(handler->callbacks,
+                              C_INT32_TO_POINTER(id))) {
+        c_set_error("duplicate request identifier");
+        return -1;
+    }
+
+    info = io_mp_msg_callback_info_new(IO_MP_MSG_TYPE_RESPONSE, cb, cb_arg);
+
+    c_hash_table_insert(handler->callbacks,
+                        C_INT32_TO_POINTER(id), info);
+
+    return 0;
+}
+
+void
+io_mp_response_handler_remove_callback(struct io_mp_response_handler *handler,
+                                       uint32_t id) {
+    struct io_mp_msg_callback_info *info;
+
+    if (c_hash_table_remove2(handler->callbacks,
+                             C_INT32_TO_POINTER(id),
+                             NULL, (void **)&info) == 1) {
+        io_mp_msg_callback_info_delete(info);
+    }
+}
+
+struct io_mp_msg_callback_info *
+io_mp_response_handler_get_callback(const struct io_mp_response_handler *handler,
+                                    uint32_t id) {
+    struct io_mp_msg_callback_info *info;
+
+    if (c_hash_table_get(handler->callbacks, C_INT32_TO_POINTER(id),
+                         (void **)&info) == 0) {
+        return NULL;
+    }
+
+    return info;
 }
 
 /* ------------------------------------------------------------------------
@@ -136,6 +326,8 @@ io_mp_connection_new(void) {
 
     connection->rbuf = c_buffer_new();
     connection->wbuf = c_buffer_new();
+
+    connection->response_handler = io_mp_response_handler_new();
 
     return connection;
 }
@@ -181,6 +373,8 @@ io_mp_connection_delete(struct io_mp_connection *connection) {
     c_buffer_delete(connection->rbuf);
     c_buffer_delete(connection->wbuf);
 
+    io_mp_response_handler_delete(connection->response_handler);
+
     c_free0(connection, sizeof(struct io_mp_connection));
 }
 
@@ -196,6 +390,20 @@ io_mp_connection_server(const struct io_mp_connection *connection) {
     assert(connection->type == IO_MP_CONNECTION_TYPE_SERVER);
 
     return connection->u.server.listener->server;
+}
+
+struct io_mp_msg_handler *
+io_mp_connection_msg_handler(const struct io_mp_connection *connection) {
+    switch (connection->type) {
+    case IO_MP_CONNECTION_TYPE_CLIENT:
+        return connection->u.client.client->msg_handler;
+
+    case IO_MP_CONNECTION_TYPE_SERVER:
+        return connection->u.server.listener->server->msg_handler;
+
+    default:
+        return NULL;
+    }
 }
 
 int
@@ -273,8 +481,8 @@ io_mp_connection_send_msg(struct io_mp_connection *connection,
 
 int
 io_mp_connection_send_notification(struct io_mp_connection *connection,
-                               uint8_t op, uint8_t flags,
-                               const void *payload, size_t payload_sz) {
+                                   uint8_t op, uint8_t flags,
+                                   const void *payload, size_t payload_sz) {
     struct io_mp_msg msg;
 
     io_mp_msg_init(&msg);
@@ -282,7 +490,7 @@ io_mp_connection_send_notification(struct io_mp_connection *connection,
     msg.op = op;
     msg.type = IO_MP_MSG_TYPE_NOTIFICATION;
     msg.flags = flags;
-    msg.id = ++connection->last_msg_id;
+    msg.id = connection->last_msg_id + 1;
 
     msg.payload = (void *)payload;
     msg.payload_sz = payload_sz;
@@ -293,39 +501,24 @@ io_mp_connection_send_notification(struct io_mp_connection *connection,
     }
 
     io_mp_msg_free(&msg);
+
+    connection->last_msg_id++;
     return 0;
 }
 
 int
 io_mp_connection_send_request(struct io_mp_connection *connection,
                               uint8_t op, uint8_t flags,
-                              const void *payload, size_t payload_sz) {
+                              const void *payload, size_t payload_sz,
+                              io_mp_msg_callback cb, void *cb_arg) {
     struct io_mp_msg msg;
+    uint32_t id;
 
-    io_mp_msg_init(&msg);
+    id = connection->last_msg_id + 1;
 
-    msg.op = op;
-    msg.type = IO_MP_MSG_TYPE_REQUEST;
-    msg.flags = flags;
-    msg.id = ++connection->last_msg_id;
-
-    msg.payload = (void *)payload;
-    msg.payload_sz = payload_sz;
-
-    if (io_mp_connection_send_msg(connection, &msg) == -1) {
-        io_mp_msg_free(&msg);
+    if (io_mp_response_handler_add_callback(connection->response_handler,
+                                            id, cb, cb_arg) == -1)
         return -1;
-    }
-
-    io_mp_msg_free(&msg);
-    return 0;
-}
-
-int
-io_mp_connection_send_response(struct io_mp_connection *connection,
-                               uint8_t op, uint8_t flags, uint32_t id,
-                               const void *payload, size_t payload_sz) {
-    struct io_mp_msg msg;
 
     io_mp_msg_init(&msg);
 
@@ -333,6 +526,35 @@ io_mp_connection_send_response(struct io_mp_connection *connection,
     msg.type = IO_MP_MSG_TYPE_REQUEST;
     msg.flags = flags;
     msg.id = id;
+
+    msg.payload = (void *)payload;
+    msg.payload_sz = payload_sz;
+
+    if (io_mp_connection_send_msg(connection, &msg) == -1) {
+        io_mp_response_handler_remove_callback(connection->response_handler, id);
+        io_mp_msg_free(&msg);
+        return -1;
+    }
+
+    io_mp_msg_free(&msg);
+
+    connection->last_msg_id++;
+    return 0;
+}
+
+int
+io_mp_connection_send_response(struct io_mp_connection *connection,
+                               const struct io_mp_msg *request_msg,
+                               uint8_t flags,
+                               const void *payload, size_t payload_sz) {
+    struct io_mp_msg msg;
+
+    io_mp_msg_init(&msg);
+
+    msg.op = request_msg->op;
+    msg.type = IO_MP_MSG_TYPE_RESPONSE;
+    msg.flags = flags;
+    msg.id = request_msg->id;
 
     msg.payload = (void *)payload;
     msg.payload_sz = payload_sz;
@@ -420,10 +642,13 @@ io_mp_connection_on_event_read(struct io_mp_connection *connection) {
         }
 
         io_mp_connection_trace(connection,
-                               "msg: op %u, type %u, payload sz %zu",
-                               msg.op, msg.type, msg.payload_sz);
+                               "msg: op %#02x, type %u, id %#08x payload sz %zu",
+                               msg.op, msg.type, msg.id, msg.payload_sz);
 
-        /* TODO process message */
+        if (io_mp_connection_process_msg(connection, &msg) == -1) {
+            io_mp_msg_free(&msg);
+            return -1;
+        }
 
         io_mp_msg_free(&msg);
 
@@ -453,6 +678,82 @@ io_mp_connection_on_event_write(struct io_mp_connection *connection) {
     return 0;
 }
 
+int
+io_mp_connection_process_msg(struct io_mp_connection *connection,
+                             const struct io_mp_msg *msg) {
+    int ret;
+
+    switch (msg->type) {
+    case IO_MP_MSG_TYPE_UNUSED:
+        c_set_error("invalid message type %u", msg->type);
+        return -1;
+
+    case IO_MP_MSG_TYPE_NOTIFICATION:
+    case IO_MP_MSG_TYPE_REQUEST:
+        ret = io_mp_connection_process_notification_request(connection, msg);
+        break;
+
+    case IO_MP_MSG_TYPE_RESPONSE:
+        ret = io_mp_connection_process_response(connection, msg);
+        break;
+    }
+
+    return ret;
+}
+
+int
+io_mp_connection_process_notification_request(struct io_mp_connection *connection,
+                                              const struct io_mp_msg *msg) {
+    const struct io_mp_msg_callback_info *info;
+    const struct io_mp_msg_handler *handler;
+
+    assert(msg->type == IO_MP_MSG_TYPE_NOTIFICATION
+        || msg->type == IO_MP_MSG_TYPE_REQUEST);
+
+    handler = io_mp_connection_msg_handler(connection);
+
+    info = io_mp_msg_handler_get_callback(handler, msg->op);
+    if (!info) {
+        c_set_error("unhandled op %#02x", msg->op);
+        return -1;
+    }
+
+    if (msg->type != info->msg_type) {
+        c_set_error("message type mismatch");
+        return -1;
+    }
+
+    if (info->cb)
+        info->cb(connection, msg, info->cb_arg);
+
+    return 0;
+}
+
+int
+io_mp_connection_process_response(struct io_mp_connection *connection,
+                                  const struct io_mp_msg *msg) {
+    const struct io_mp_msg_callback_info *info;
+    struct io_mp_msg_handler *handler;
+
+    assert(msg->type == IO_MP_MSG_TYPE_RESPONSE);
+
+    handler = io_mp_connection_msg_handler(connection);
+
+    info = io_mp_response_handler_get_callback(connection->response_handler,
+                                               msg->id);
+    if (!info) {
+        c_set_error("unknown message id %#08x", msg->id);
+        return -1;
+    }
+
+    if (info->cb)
+        info->cb(connection, msg, info->cb_arg);
+
+    io_mp_response_handler_remove_callback(connection->response_handler,
+                                           msg->id);
+    return 0;
+}
+
 /* ------------------------------------------------------------------------
  *  Client
  * ------------------------------------------------------------------------ */
@@ -465,6 +766,8 @@ io_mp_client_new(struct io_base *base) {
     client->base = base;
     client->state = IO_MP_CLIENT_STATE_INACTIVE;
 
+    client->msg_handler = io_mp_msg_handler_new();
+
     return client;
 }
 
@@ -472,6 +775,8 @@ void
 io_mp_client_delete(struct io_mp_client *client) {
     if (!client)
         return;
+
+    io_mp_msg_handler_delete(client->msg_handler);
 
     c_free0(client, sizeof(struct io_mp_client));
 }
@@ -597,6 +902,19 @@ io_mp_client_disconnect(struct io_mp_client *client) {
     }
 
     io_mp_client_reset(client);
+}
+
+void
+io_mp_client_bind_op(struct io_mp_client *client,
+                     uint8_t op, enum io_mp_msg_type msg_type,
+                     io_mp_msg_callback cb, void *cb_arg) {
+    io_mp_msg_handler_bind_op(client->msg_handler, op, msg_type,
+                              cb, cb_arg);
+}
+
+void
+io_mp_client_unbind_op(struct io_mp_client *client, uint8_t op) {
+    io_mp_msg_handler_unbind_op(client->msg_handler, op);
 }
 
 int
@@ -821,6 +1139,8 @@ io_mp_server_new(struct io_base *base) {
     server->base = base;
     server->connections = c_hash_table_new(c_hash_int32, c_equal_int32);
 
+    server->msg_handler = io_mp_msg_handler_new();
+
     return server;
 }
 
@@ -844,6 +1164,8 @@ io_mp_server_delete(struct io_mp_server *server) {
     for (size_t i = 0; i < server->nb_listeners; i++)
         io_mp_listener_delete(server->listeners[i]);
     c_free(server->listeners);
+
+    io_mp_msg_handler_delete(server->msg_handler);
 
     c_free0(server, sizeof(struct io_mp_server));
 }
@@ -1004,6 +1326,19 @@ error:
 
     server->nb_listeners = original_nb_listeners;
     return -1;
+}
+
+void
+io_mp_server_bind_op(struct io_mp_server *server,
+                     uint8_t op, enum io_mp_msg_type msg_type,
+                     io_mp_msg_callback cb, void *cb_arg) {
+    io_mp_msg_handler_bind_op(server->msg_handler, op, msg_type,
+                              cb, cb_arg);
+}
+
+void
+io_mp_server_unbind_op(struct io_mp_server *server, uint8_t op) {
+    io_mp_msg_handler_unbind_op(server->msg_handler, op);
 }
 
 int

@@ -35,6 +35,11 @@ static void ioex_on_signal(int, void *);
 static void ioex_on_client_event(struct io_mp_connection *,
                                  enum io_mp_connection_event, void *);
 
+static void ioex_on_notification_string(struct io_mp_connection *,
+                                        const struct io_mp_msg *, void *);
+static void ioex_on_response_random(struct io_mp_connection *,
+                                    const struct io_mp_msg *, void *);
+
 struct ioex ioex;
 
 int
@@ -55,6 +60,9 @@ main(int argc, char **argv) {
     ioex.client = io_mp_client_new(ioex.base);
 
     io_mp_client_set_event_callback(ioex.client, ioex_on_client_event);
+
+    io_mp_client_bind_op(ioex.client, 1, IO_MP_MSG_TYPE_NOTIFICATION,
+                         ioex_on_notification_string, NULL);
 
     if (io_mp_client_connect(ioex.client, host, port) == -1)
         ioex_die("cannot connect to %s:%u: %s", host, port, c_get_error());
@@ -117,6 +125,13 @@ ioex_on_client_event(struct io_mp_connection *connection,
                                                "hello", 6) == -1) {
             ioex_die("cannot send message: %s", c_get_error());
         }
+
+        if (io_mp_connection_send_request(connection,
+                                          2, IO_MP_MSG_FLAG_DEFAULT,
+                                          NULL, 0,
+                                          ioex_on_response_random, NULL) == -1) {
+            ioex_die("cannot send message: %s", c_get_error());
+        }
         break;
 
     case IO_MP_CONNECTION_EVENT_LOST:
@@ -124,4 +139,35 @@ ioex_on_client_event(struct io_mp_connection *connection,
         ioex.do_exit = true;
         break;
     }
+}
+
+static void
+ioex_on_notification_string(struct io_mp_connection *connection,
+                            const struct io_mp_msg *msg, void *arg) {
+    const char *string;
+
+    string = io_mp_msg_payload(msg, NULL);
+
+    printf("string: %s\n", string);
+}
+
+static void
+ioex_on_response_random(struct io_mp_connection *connection,
+                        const struct io_mp_msg *msg, void *arg) {
+    const uint8_t *payload;
+    size_t sz;
+    uint32_t number;
+
+    payload = io_mp_msg_payload(msg, &sz);
+    if (sz < 4) {
+        fprintf(stderr, "invalid response payload\n");
+        return;
+    }
+
+    number = ((uint32_t)payload[0] << 24)
+           | ((uint32_t)payload[1] << 16)
+           | ((uint32_t)payload[2] <<  8)
+           |  (uint32_t)payload[3];
+
+    printf("random number: %u\n", number);
 }
