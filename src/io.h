@@ -105,4 +105,77 @@ int io_base_remove_timer(struct io_base *, int);
 bool io_base_has_watchers(const struct io_base *);
 int io_base_read_events(struct io_base *);
 
+/* ------------------------------------------------------------------------
+ *  Messaging protocol
+ * ------------------------------------------------------------------------ */
+/* Message */
+enum io_mp_msg_flag {
+    IO_MP_MSG_FLAG_DEFAULT = 0,
+};
+
+/* Connection */
+struct io_mp_connection;
+
+enum io_mp_connection_event {
+    IO_MP_CONNECTION_EVENT_TRACE,
+    IO_MP_CONNECTION_EVENT_ERROR,
+    IO_MP_CONNECTION_EVENT_ESTABLISHED,
+    IO_MP_CONNECTION_EVENT_LOST,
+};
+
+int io_mp_connection_send_notification(struct io_mp_connection *,
+                                       uint8_t, uint8_t,
+                                       const void *, size_t);
+int io_mp_connection_send_request(struct io_mp_connection *,
+                                  uint8_t, uint8_t,
+                                  const void *, size_t);
+int io_mp_connection_send_response(struct io_mp_connection *,
+                                   uint8_t, uint8_t,
+                                   uint32_t, const void *, size_t);
+
+/* Client */
+struct io_mp_client;
+
+typedef void (*io_mp_client_event_callback)(struct io_mp_client *,
+                                            enum io_mp_connection_event,
+                                            void *);
+
+struct io_mp_client *io_mp_client_new(struct io_base *);
+void io_mp_client_delete(struct io_mp_client *);
+
+void *io_mp_client_private_data(struct io_mp_client *);
+
+void io_mp_client_set_private_data(struct io_mp_client *, void *);
+void io_mp_client_set_event_callback(struct io_mp_client *,
+                                     io_mp_client_event_callback);
+
+int io_mp_client_connect(struct io_mp_client *, const char *, uint16_t);
+void io_mp_client_disconnect(struct io_mp_client *);
+
+int io_mp_client_send_notification(struct io_mp_client *, uint8_t, uint8_t,
+                                   const void *, size_t);
+int io_mp_client_send_request(struct io_mp_client *, uint8_t, uint8_t,
+                              const void *, size_t);
+int io_mp_client_send_response(struct io_mp_client *, uint8_t, uint8_t,
+                              uint32_t, const void *, size_t);
+
+/* Server */
+struct io_mp_server;
+
+typedef void (*io_mp_server_event_callback)(struct io_mp_server *,
+                                            struct io_mp_connection *,
+                                            enum io_mp_connection_event,
+                                            void *);
+
+struct io_mp_server *io_mp_server_new(struct io_base *);
+void io_mp_server_delete(struct io_mp_server *);
+
+void *io_mp_server_private_data(struct io_mp_server *);
+
+void io_mp_server_set_private_data(struct io_mp_server *, void *);
+void io_mp_server_set_event_callback(struct io_mp_server *,
+                                     io_mp_server_event_callback);
+
+int io_mp_server_listen(struct io_mp_server *, const char *, uint16_t);
+
 #endif

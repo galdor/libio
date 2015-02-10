@@ -24,6 +24,8 @@
 #include <signal.h>
 #include <string.h>
 
+#include <net/if.h>
+
 #include "io.h"
 
 /* ------------------------------------------------------------------------
@@ -130,6 +132,172 @@ int io_base_enable_timer_backend(struct io_base *, struct io_watcher *);
 int io_base_disable_timer_backend(struct io_base *, struct io_watcher *);
 
 int io_base_read_events_backend(struct io_base *);
+
+/* ------------------------------------------------------------------------
+ *  Messaging protocol
+ * ------------------------------------------------------------------------ */
+/* Message */
+#define IO_MP_MSG_HEADER_SZ 12 /* bytes */
+
+enum io_mp_msg_type {
+    IO_MP_MSG_TYPE_UNUSED       = 0,
+    IO_MP_MSG_TYPE_NOTIFICATION = 1,
+    IO_MP_MSG_TYPE_REQUEST      = 2,
+    IO_MP_MSG_TYPE_RESPONSE     = 3,
+};
+
+struct io_mp_msg {
+    uint8_t op;
+    uint8_t type    :  2; /* enum io_mp_msg_type */
+    uint8_t flags   :  6; /* enum io_mp_msg_flag */
+
+    uint32_t id;
+
+    void *payload;
+    size_t payload_sz;
+
+    bool owns_payload;
+};
+
+void io_mp_msg_init(struct io_mp_msg *);
+void io_mp_msg_delete(struct io_mp_msg *);
+
+struct io_mp_msg *io_mp_msg_new(void);
+void io_mp_msg_delete(struct io_mp_msg *);
+
+int io_mp_msg_decode(struct io_mp_msg *, const void *, size_t, size_t *);
+void io_mp_msg_encode(const struct io_mp_msg *, struct c_buffer *);
+
+/* Connections */
+enum io_mp_connection_type {
+    IO_MP_CONNECTION_TYPE_CLIENT,
+    IO_MP_CONNECTION_TYPE_SERVER
+};
+
+struct io_mp_connection {
+    struct io_base *base;
+    io_fd_callback event_callback;
+
+    enum io_mp_connection_type type;
+
+    struct io_address address;
+    int sock;
+
+    struct c_buffer *rbuf;
+    struct c_buffer *wbuf;
+
+    bool closed;
+
+    uint32_t last_msg_id;
+
+    union {
+        struct {
+            struct io_mp_client *client;
+        } client;
+
+        struct {
+            struct io_mp_listener *listener;
+        } server;
+    } u;
+};
+
+struct io_mp_connection *io_mp_connection_new(void);
+struct io_mp_connection *io_mp_connection_new_client(struct io_mp_client *,
+                                                     int);
+struct io_mp_connection *io_mp_connection_new_server(struct io_mp_listener *);
+void io_mp_connection_delete(struct io_mp_connection *);
+
+int io_mp_connection_get_socket_error(struct io_mp_connection *, int *);
+
+void io_mp_connection_trace(struct io_mp_connection *, const char *, ...)
+    __attribute__ ((format(printf, 2, 3)));
+
+int io_mp_connection_watch_read(struct io_mp_connection *);
+int io_mp_connection_watch_read_write(struct io_mp_connection *);
+
+int io_mp_connection_send_msg(struct io_mp_connection *,
+                              const struct io_mp_msg *);
+
+void io_mp_connection_on_event(int, uint32_t, void *);
+int io_mp_connection_on_event_read(struct io_mp_connection *);
+int io_mp_connection_on_event_write(struct io_mp_connection *);
+
+/* Client */
+enum io_mp_client_state {
+    IO_MP_CLIENT_STATE_INACTIVE,
+    IO_MP_CLIENT_STATE_CONNECTING,
+    IO_MP_CLIENT_STATE_CONNECTED,
+};
+
+struct io_mp_client {
+    struct io_base *base;
+
+    enum io_mp_client_state state;
+
+    struct io_mp_connection *connection;
+
+    void *private_data;
+    io_mp_client_event_callback event_callback;
+};
+
+void io_mp_client_signal_event(struct io_mp_client *,
+                               enum io_mp_connection_event, void *);
+void io_mp_client_trace(struct io_mp_client *, const char *, ...)
+    __attribute__ ((format(printf, 2, 3)));
+void io_mp_client_error(struct io_mp_client *, const char *, ...)
+    __attribute__ ((format(printf, 2, 3)));
+
+void io_mp_client_reset(struct io_mp_client *);
+
+int io_mp_client_on_event(struct io_mp_client *, uint32_t);
+int io_mp_client_on_event_write_connecting(struct io_mp_client *);
+
+/* Listener */
+struct io_mp_listener {
+    struct io_mp_server *server;
+
+    char iface[IFNAMSIZ];
+    struct io_address address;
+
+    int sock;
+};
+
+struct io_mp_listener *io_mp_listener_new(struct io_mp_server *);
+void io_mp_listener_delete(struct io_mp_listener *);
+
+int io_mp_listener_listen(struct io_mp_listener *, const char *,
+                          const struct io_address *);
+
+void io_mp_listener_on_event(int, uint32_t, void *);
+
+/* Server */
+struct io_mp_server {
+    struct io_base *base;
+
+    struct io_mp_listener **listeners;
+    size_t nb_listeners;
+
+    struct c_hash_table *connections; /* fd -> connection */
+
+    void *private_data;
+    io_mp_server_event_callback event_callback;
+};
+
+void io_mp_server_signal_event(struct io_mp_server *,
+                               struct io_mp_connection *,
+                               enum io_mp_connection_event, void *);
+void io_mp_server_trace(struct io_mp_server *, struct io_mp_connection *,
+                        const char *, ...)
+    __attribute__ ((format(printf, 3, 4)));
+void io_mp_server_error(struct io_mp_server *, struct io_mp_connection *,
+                        const char *, ...)
+    __attribute__ ((format(printf, 3, 4)));
+
+void io_mp_server_destroy_connection(struct io_mp_server *,
+                                     struct io_mp_connection *);
+
+int io_mp_server_on_event(struct io_mp_server *, struct io_mp_connection *,
+                          uint32_t);
 
 /* ------------------------------------------------------------------------
  *  Utils
