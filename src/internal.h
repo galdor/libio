@@ -237,7 +237,7 @@ struct io_mp_client {
     struct io_mp_connection *connection;
 
     void *private_data;
-    io_mp_client_event_callback event_callback;
+    io_mp_connection_event_callback event_callback;
 };
 
 void io_mp_client_signal_event(struct io_mp_client *,
@@ -280,7 +280,7 @@ struct io_mp_server {
     struct c_hash_table *connections; /* fd -> connection */
 
     void *private_data;
-    io_mp_server_event_callback event_callback;
+    io_mp_connection_event_callback event_callback;
 };
 
 void io_mp_server_signal_event(struct io_mp_server *,

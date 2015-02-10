@@ -184,6 +184,20 @@ io_mp_connection_delete(struct io_mp_connection *connection) {
     c_free0(connection, sizeof(struct io_mp_connection));
 }
 
+struct io_mp_client *
+io_mp_connection_client(const struct io_mp_connection *connection) {
+    assert(connection->type == IO_MP_CONNECTION_TYPE_CLIENT);
+
+    return connection->u.client.client;
+}
+
+struct io_mp_server *
+io_mp_connection_server(const struct io_mp_connection *connection) {
+    assert(connection->type == IO_MP_CONNECTION_TYPE_SERVER);
+
+    return connection->u.server.listener->server;
+}
+
 int
 io_mp_connection_get_socket_error(struct io_mp_connection *connection,
                                   int *perror) {
@@ -462,8 +476,15 @@ io_mp_client_delete(struct io_mp_client *client) {
     c_free0(client, sizeof(struct io_mp_client));
 }
 
+struct io_mp_connection *
+io_mp_client_connection(const struct io_mp_client *client) {
+    assert(client->state == IO_MP_CLIENT_STATE_CONNECTED);
+
+    return client->connection;
+}
+
 void *
-io_mp_client_private_data(struct io_mp_client *client) {
+io_mp_client_private_data(const struct io_mp_client *client) {
     return client->private_data;
 }
 
@@ -474,7 +495,7 @@ io_mp_client_set_private_data(struct io_mp_client *client, void *data) {
 
 void
 io_mp_client_set_event_callback(struct io_mp_client *client,
-                                io_mp_client_event_callback callback) {
+                                io_mp_connection_event_callback callback) {
     client->event_callback = callback;
 }
 
@@ -484,7 +505,7 @@ io_mp_client_signal_event(struct io_mp_client *client,
     if (!client->event_callback)
         return;
 
-    client->event_callback(client, event, data);
+    client->event_callback(client->connection, event, data);
 }
 
 void
@@ -576,30 +597,6 @@ io_mp_client_disconnect(struct io_mp_client *client) {
     }
 
     io_mp_client_reset(client);
-}
-
-int
-io_mp_client_send_notification(struct io_mp_client *client,
-                               uint8_t op, uint8_t flags,
-                               const void *payload, size_t payload_sz) {
-    return io_mp_connection_send_notification(client->connection, op, flags,
-                                              payload, payload_sz);
-}
-
-int
-io_mp_client_send_request(struct io_mp_client *client,
-                          uint8_t op, uint8_t flags,
-                          const void *payload, size_t payload_sz) {
-    return io_mp_connection_send_request(client->connection, op, flags,
-                                         payload, payload_sz);
-}
-
-int
-io_mp_client_send_response(struct io_mp_client *client,
-                           uint8_t op, uint8_t flags, uint32_t id,
-                           const void *payload, size_t payload_sz) {
-    return io_mp_connection_send_response(client->connection, op, flags, id,
-                                          payload, payload_sz);
 }
 
 int
@@ -863,7 +860,7 @@ io_mp_server_set_private_data(struct io_mp_server *server, void *data) {
 
 void
 io_mp_server_set_event_callback(struct io_mp_server *server,
-                                io_mp_server_event_callback callback) {
+                                io_mp_connection_event_callback callback) {
     server->event_callback = callback;
 }
 
@@ -874,7 +871,7 @@ io_mp_server_signal_event(struct io_mp_server *server,
     if (!server->event_callback)
         return;
 
-    server->event_callback(server, connection, event, data);
+    server->event_callback(connection, event, data);
 }
 
 void
@@ -882,9 +879,6 @@ io_mp_server_trace(struct io_mp_server *server,
                    struct io_mp_connection *connection, const char *fmt, ...) {
     char msg[C_ERROR_BUFSZ];
     va_list ap;
-
-    if (!server->event_callback)
-        return;
 
     va_start(ap, fmt);
     vsnprintf(msg, C_ERROR_BUFSZ, fmt, ap);
@@ -899,9 +893,6 @@ io_mp_server_error(struct io_mp_server *server,
                    struct io_mp_connection *connection, const char *fmt, ...) {
     char msg[C_ERROR_BUFSZ];
     va_list ap;
-
-    if (!server->event_callback)
-        return;
 
     va_start(ap, fmt);
     vsnprintf(msg, C_ERROR_BUFSZ, fmt, ap);

@@ -32,7 +32,7 @@ static void ioex_die(const char *, ...)
 
 static void ioex_on_signal(int, void *);
 
-static void ioex_on_client_event(struct io_mp_client *,
+static void ioex_on_client_event(struct io_mp_connection *,
                                  enum io_mp_connection_event, void *);
 
 struct ioex ioex;
@@ -98,7 +98,7 @@ ioex_on_signal(int signo, void *arg) {
 }
 
 static void
-ioex_on_client_event(struct io_mp_client *client,
+ioex_on_client_event(struct io_mp_connection *connection,
                      enum io_mp_connection_event event, void *data) {
     switch (event) {
     case IO_MP_CONNECTION_EVENT_TRACE:
@@ -112,8 +112,9 @@ ioex_on_client_event(struct io_mp_client *client,
     case IO_MP_CONNECTION_EVENT_ESTABLISHED:
         printf("connection established\n");
 
-        if (io_mp_client_send_notification(client, 1, IO_MP_MSG_FLAG_DEFAULT,
-                                           "hello", 6) == -1) {
+        if (io_mp_connection_send_notification(connection, 1,
+                                               IO_MP_MSG_FLAG_DEFAULT,
+                                               "hello", 6) == -1) {
             ioex_die("cannot send message: %s", c_get_error());
         }
         break;

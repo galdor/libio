@@ -32,8 +32,7 @@ static void ioex_die(const char *, ...)
 
 static void ioex_on_signal(int, void *);
 
-static void ioex_on_server_event(struct io_mp_server *,
-                                 struct io_mp_connection *,
+static void ioex_on_server_event(struct io_mp_connection *,
                                  enum io_mp_connection_event, void *);
 
 struct ioex ioex;
@@ -99,8 +98,7 @@ ioex_on_signal(int signo, void *arg) {
 }
 
 static void
-ioex_on_server_event(struct io_mp_server *server,
-                     struct io_mp_connection *connection,
+ioex_on_server_event(struct io_mp_connection *connection,
                      enum io_mp_connection_event event, void *data) {
     switch (event) {
     case IO_MP_CONNECTION_EVENT_TRACE:
