@@ -41,11 +41,11 @@ io_address_init(struct io_address *address, const char *host, uint16_t port) {
     hints.ai_flags = 0;
     hints.ai_family = AF_UNSPEC;
     hints.ai_addrlen = 0;
-    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
+    hints.ai_flags = AI_NUMERICSERV;
 
     ret = getaddrinfo(host, service, &hints, &res);
     if (ret != 0) {
-        c_set_error("cannot parse %s:%u: %s", host, port, gai_strerror(ret));
+        c_set_error("cannot resolve %s:%u: %s", host, port, gai_strerror(ret));
         return -1;
     }
 
