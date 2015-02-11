@@ -33,7 +33,7 @@ static void ioex_die(const char *, ...)
 static void ioex_on_signal(int, void *);
 
 static void ioex_on_client_event(struct io_mp_connection *,
-                                 enum io_mp_connection_event, void *);
+                                 enum io_mp_connection_event, void *, void *);
 
 static void ioex_on_notification_string(struct io_mp_connection *,
                                         const struct io_mp_msg *, void *);
@@ -59,7 +59,7 @@ main(int argc, char **argv) {
 
     ioex.client = io_mp_client_new(ioex.base);
 
-    io_mp_client_set_event_callback(ioex.client, ioex_on_client_event);
+    io_mp_client_set_event_callback(ioex.client, ioex_on_client_event, NULL);
 
     io_mp_client_bind_op(ioex.client, 1, IO_MP_MSG_TYPE_NOTIFICATION,
                          ioex_on_notification_string, NULL);
@@ -107,7 +107,7 @@ ioex_on_signal(int signo, void *arg) {
 
 static void
 ioex_on_client_event(struct io_mp_connection *connection,
-                     enum io_mp_connection_event event, void *data) {
+                     enum io_mp_connection_event event, void *data, void *arg) {
     switch (event) {
     case IO_MP_CONNECTION_EVENT_TRACE:
         printf("trace: %s\n", (const char *)data);

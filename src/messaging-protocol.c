@@ -816,17 +816,19 @@ io_mp_client_set_private_data(struct io_mp_client *client, void *data) {
 
 void
 io_mp_client_set_event_callback(struct io_mp_client *client,
-                                io_mp_connection_event_callback callback) {
-    client->event_callback = callback;
+                                io_mp_connection_event_callback cb,
+                                void *cb_arg) {
+    client->event_cb = cb;
+    client->event_cb_arg = cb_arg;
 }
 
 void
 io_mp_client_signal_event(struct io_mp_client *client,
                           enum io_mp_connection_event event, void *data) {
-    if (!client->event_callback)
+    if (!client->event_cb)
         return;
 
-    client->event_callback(client->connection, event, data);
+    client->event_cb(client->connection, event, data, client->event_cb_arg);
 }
 
 void
@@ -863,9 +865,9 @@ io_mp_client_reset(struct io_mp_client *client) {
         client->reconnection_timer = -1;
     }
 
-    io_mp_client_trace(client, "client reset"); /* XXX remove */
-
     client->state = IO_MP_CLIENT_STATE_INACTIVE;
+
+    io_mp_client_trace(client, "client reset"); /* XXX remove */
 }
 
 void
@@ -1252,18 +1254,20 @@ io_mp_server_set_private_data(struct io_mp_server *server, void *data) {
 
 void
 io_mp_server_set_event_callback(struct io_mp_server *server,
-                                io_mp_connection_event_callback callback) {
-    server->event_callback = callback;
+                                io_mp_connection_event_callback cb,
+                                void *cb_arg) {
+    server->event_cb = cb;
+    server->event_cb_arg = cb_arg;
 }
 
 void
 io_mp_server_signal_event(struct io_mp_server *server,
                           struct io_mp_connection *connection,
                           enum io_mp_connection_event event, void *data) {
-    if (!server->event_callback)
+    if (!server->event_cb)
         return;
 
-    server->event_callback(connection, event, data);
+    server->event_cb(connection, event, data, server->event_cb_arg);
 }
 
 void

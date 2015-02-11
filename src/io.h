@@ -138,7 +138,7 @@ enum io_mp_connection_event {
 
 typedef void (*io_mp_connection_event_callback)(struct io_mp_connection *,
                                                 enum io_mp_connection_event,
-                                                void *);
+                                                void *, void *);
 
 typedef void (*io_mp_msg_callback)(struct io_mp_connection *,
                                    const struct io_mp_msg *, void *);
@@ -169,7 +169,8 @@ bool io_mp_client_is_connected(const struct io_mp_client *);
 
 void io_mp_client_set_private_data(struct io_mp_client *, void *);
 void io_mp_client_set_event_callback(struct io_mp_client *,
-                                     io_mp_connection_event_callback);
+                                     io_mp_connection_event_callback,
+                                     void *);
 
 int io_mp_client_connect(struct io_mp_client *, const char *, uint16_t);
 void io_mp_client_disconnect(struct io_mp_client *);
@@ -188,7 +189,8 @@ void *io_mp_server_private_data(struct io_mp_server *);
 
 void io_mp_server_set_private_data(struct io_mp_server *, void *);
 void io_mp_server_set_event_callback(struct io_mp_server *,
-                                     io_mp_connection_event_callback);
+                                     io_mp_connection_event_callback,
+                                     void *);
 
 int io_mp_server_listen(struct io_mp_server *, const char *, uint16_t);
 

@@ -292,7 +292,8 @@ struct io_mp_client {
     uint64_t reconnection_delay;
 
     void *private_data;
-    io_mp_connection_event_callback event_callback;
+    io_mp_connection_event_callback event_cb;
+    void *event_cb_arg;
 
     struct io_mp_msg_handler *msg_handler;
 };
@@ -339,7 +340,8 @@ struct io_mp_server {
     struct c_hash_table *connections; /* fd -> connection */
 
     void *private_data;
-    io_mp_connection_event_callback event_callback;
+    io_mp_connection_event_callback event_cb;
+    void *event_cb_arg;
 
     struct io_mp_msg_handler *msg_handler;
 };
