@@ -212,7 +212,6 @@ enum io_mp_connection_type {
 
 struct io_mp_connection {
     struct io_base *base;
-    io_fd_callback event_callback;
 
     enum io_mp_connection_type type;
 
