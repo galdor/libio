@@ -65,6 +65,11 @@ io_mp_msg_delete(struct io_mp_msg *msg) {
     c_free(msg);
 }
 
+uint8_t
+io_mp_msg_op(const struct io_mp_msg *msg) {
+    return msg->op;
+}
+
 uint32_t
 io_mp_msg_id(const struct io_mp_msg *msg) {
     return msg->id;
@@ -797,6 +802,11 @@ io_mp_client_connection(const struct io_mp_client *client) {
 void *
 io_mp_client_private_data(const struct io_mp_client *client) {
     return client->private_data;
+}
+
+bool
+io_mp_client_is_connected(const struct io_mp_client *client) {
+    return client->state == IO_MP_CLIENT_STATE_CONNECTED;
 }
 
 void

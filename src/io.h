@@ -122,6 +122,7 @@ enum io_mp_msg_flag {
     IO_MP_MSG_FLAG_DEFAULT = 0,
 };
 
+uint8_t io_mp_msg_op(const struct io_mp_msg *);
 uint32_t io_mp_msg_id(const struct io_mp_msg *);
 const void *io_mp_msg_payload(const struct io_mp_msg *, size_t *);
 
@@ -164,6 +165,7 @@ void io_mp_client_delete(struct io_mp_client *);
 
 struct io_mp_connection *io_mp_client_connection(const struct io_mp_client *);
 void *io_mp_client_private_data(const struct io_mp_client *);
+bool io_mp_client_is_connected(const struct io_mp_client *);
 
 void io_mp_client_set_private_data(struct io_mp_client *, void *);
 void io_mp_client_set_event_callback(struct io_mp_client *,
