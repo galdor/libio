@@ -146,6 +146,8 @@ typedef void (*io_mp_msg_callback)(struct io_mp_connection *,
 struct io_mp_client *io_mp_connection_client(const struct io_mp_connection *);
 struct io_mp_server *io_mp_connection_server(const struct io_mp_connection *);
 
+void io_mp_connection_close(struct io_mp_connection *);
+
 void io_mp_connection_set_private_data(struct io_mp_connection *, void *);
 void *io_mp_connection_private_data(const struct io_mp_connection *);
 

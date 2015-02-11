@@ -397,6 +397,11 @@ io_mp_connection_server(const struct io_mp_connection *connection) {
     return connection->u.server.listener->server;
 }
 
+void
+io_mp_connection_close(struct io_mp_connection *connection) {
+    connection->closed = true;
+}
+
 struct io_mp_msg_handler *
 io_mp_connection_msg_handler(const struct io_mp_connection *connection) {
     switch (connection->type) {
