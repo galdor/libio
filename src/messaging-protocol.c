@@ -761,7 +761,7 @@ struct io_mp_client *
 io_mp_client_new(struct io_base *base) {
     struct io_mp_client *client;
 
-    client = c_malloc0(sizeof(struct io_base));
+    client = c_malloc0(sizeof(struct io_mp_client));
 
     client->base = base;
     client->state = IO_MP_CLIENT_STATE_INACTIVE;
