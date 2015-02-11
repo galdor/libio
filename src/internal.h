@@ -227,6 +227,8 @@ struct io_mp_connection {
 
     struct io_mp_response_handler *response_handler;
 
+    void *private_data;
+
     union {
         struct {
             struct io_mp_client *client;
@@ -290,7 +292,6 @@ struct io_mp_client {
     int reconnection_timer;
     uint64_t reconnection_delay;
 
-    void *private_data;
     io_mp_connection_event_callback event_cb;
     void *event_cb_arg;
 
@@ -338,7 +339,6 @@ struct io_mp_server {
 
     struct c_hash_table *connections; /* fd -> connection */
 
-    void *private_data;
     io_mp_connection_event_callback event_cb;
     void *event_cb_arg;
 

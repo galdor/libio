@@ -484,6 +484,17 @@ io_mp_connection_send_msg(struct io_mp_connection *connection,
     return 0;
 }
 
+void
+io_mp_connection_set_private_data(struct io_mp_connection *connection,
+                                  void *data) {
+    connection->private_data = data;
+}
+
+void *
+io_mp_connection_private_data(const struct io_mp_connection *connection) {
+    return connection->private_data;
+}
+
 int
 io_mp_connection_send_notification(struct io_mp_connection *connection,
                                    uint8_t op, uint8_t flags,
@@ -799,19 +810,9 @@ io_mp_client_connection(const struct io_mp_client *client) {
     return client->connection;
 }
 
-void *
-io_mp_client_private_data(const struct io_mp_client *client) {
-    return client->private_data;
-}
-
 bool
 io_mp_client_is_connected(const struct io_mp_client *client) {
     return client->state == IO_MP_CLIENT_STATE_CONNECTED;
-}
-
-void
-io_mp_client_set_private_data(struct io_mp_client *client, void *data) {
-    client->private_data = data;
 }
 
 void
@@ -1240,16 +1241,6 @@ io_mp_server_delete(struct io_mp_server *server) {
     io_mp_msg_handler_delete(server->msg_handler);
 
     c_free0(server, sizeof(struct io_mp_server));
-}
-
-void *
-io_mp_server_private_data(struct io_mp_server *server) {
-    return server->private_data;
-}
-
-void
-io_mp_server_set_private_data(struct io_mp_server *server, void *data) {
-    server->private_data = data;
 }
 
 void
