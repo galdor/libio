@@ -136,7 +136,6 @@ ioex_on_client_event(struct io_mp_connection *connection,
 
     case IO_MP_CONNECTION_EVENT_LOST:
         printf("connection lost\n");
-        ioex.do_exit = true;
         break;
     }
 }

@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include <net/if.h>
+#include <netdb.h>
 
 #include "io.h"
 
@@ -274,6 +275,7 @@ enum io_mp_client_state {
     IO_MP_CLIENT_STATE_INACTIVE,
     IO_MP_CLIENT_STATE_CONNECTING,
     IO_MP_CLIENT_STATE_CONNECTED,
+    IO_MP_CLIENT_STATE_WAITING_RECONNECTION,
 };
 
 struct io_mp_client {
@@ -281,7 +283,13 @@ struct io_mp_client {
 
     enum io_mp_client_state state;
 
+    char host[NI_MAXHOST];
+    uint16_t port;
+
     struct io_mp_connection *connection;
+
+    int reconnection_timer;
+    uint64_t reconnection_delay;
 
     void *private_data;
     io_mp_connection_event_callback event_callback;
@@ -297,9 +305,11 @@ void io_mp_client_error(struct io_mp_client *, const char *, ...)
     __attribute__ ((format(printf, 2, 3)));
 
 void io_mp_client_reset(struct io_mp_client *);
+void io_mp_client_schedule_reconnection(struct io_mp_client *);
 
 int io_mp_client_on_event(struct io_mp_client *, uint32_t);
 int io_mp_client_on_event_write_connecting(struct io_mp_client *);
+void io_mp_client_on_reconnection_timer(int, uint64_t, void *);
 
 /* Listener */
 struct io_mp_listener {

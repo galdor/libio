@@ -582,11 +582,14 @@ io_mp_connection_on_event(int fd, uint32_t events, void *arg) {
         if (io_mp_client_on_event(client, events) == -1) {
             io_mp_client_error(client, "%s", c_get_error());
             io_mp_client_disconnect(client);
+            io_mp_client_schedule_reconnection(client);
             return;
         }
 
-        if (connection->closed)
+        if (connection->closed) {
             io_mp_client_disconnect(client);
+            io_mp_client_schedule_reconnection(client);
+        }
     } else if (connection->type == IO_MP_CONNECTION_TYPE_SERVER) {
         struct io_mp_listener *listener;
         struct io_mp_server *server;
@@ -766,6 +769,9 @@ io_mp_client_new(struct io_base *base) {
     client->base = base;
     client->state = IO_MP_CLIENT_STATE_INACTIVE;
 
+    client->reconnection_timer = -1;
+    client->reconnection_delay = 1000;
+
     client->msg_handler = io_mp_msg_handler_new();
 
     return client;
@@ -842,9 +848,35 @@ io_mp_client_reset(struct io_mp_client *client) {
     io_mp_connection_delete(client->connection);
     client->connection = NULL;
 
+    if (client->reconnection_timer >= 0) {
+        io_base_remove_timer(client->base, client->reconnection_timer);
+        client->reconnection_timer = -1;
+    }
+
     io_mp_client_trace(client, "client reset"); /* XXX remove */
 
     client->state = IO_MP_CLIENT_STATE_INACTIVE;
+}
+
+void
+io_mp_client_schedule_reconnection(struct io_mp_client *client) {
+    int timer;
+
+    assert(client->state == IO_MP_CLIENT_STATE_INACTIVE);
+
+    io_mp_client_trace(client, "scheduling reconnection");
+
+    timer = io_base_add_timer(client->base, client->reconnection_delay,
+                              0, io_mp_client_on_reconnection_timer, client);
+    if (timer == -1) {
+        c_set_error("cannot create timer: %s", c_get_error());
+        io_mp_client_error(client, "cannot create timer: %s", c_get_error());
+        io_mp_client_reset(client);
+        return;
+    }
+
+    client->reconnection_timer = timer;
+    client->state = IO_MP_CLIENT_STATE_WAITING_RECONNECTION;
 }
 
 int
@@ -854,6 +886,13 @@ io_mp_client_connect(struct io_mp_client *client,
     int sock;
 
     assert(client->state == IO_MP_CLIENT_STATE_INACTIVE);
+
+    if (c_strlcpy(client->host, host, NI_MAXHOST) >= NI_MAXHOST) {
+        c_set_error("hostname too long");
+        return -1;
+    }
+
+    client->port = port;
 
     if (io_address_init(&address, host, port) == -1) {
         c_set_error("cannot initialize address: %s", c_get_error());
@@ -927,6 +966,7 @@ io_mp_client_on_event(struct io_mp_client *client, uint32_t events) {
         switch (client->state) {
         case IO_MP_CLIENT_STATE_INACTIVE:
         case IO_MP_CLIENT_STATE_CONNECTING:
+        case IO_MP_CLIENT_STATE_WAITING_RECONNECTION:
             /* Should not happen */
             break;
 
@@ -942,6 +982,7 @@ io_mp_client_on_event(struct io_mp_client *client, uint32_t events) {
     if (events & IO_EVENT_FD_WRITE) {
         switch (client->state) {
         case IO_MP_CLIENT_STATE_INACTIVE:
+        case IO_MP_CLIENT_STATE_WAITING_RECONNECTION:
             /* Should not happen */
             break;
 
@@ -992,6 +1033,25 @@ io_mp_client_on_event_write_connecting(struct io_mp_client *client) {
 
     io_mp_client_signal_event(client, IO_MP_CONNECTION_EVENT_ESTABLISHED, NULL);
     return 0;
+}
+
+void
+io_mp_client_on_reconnection_timer(int timer, uint64_t delay, void *arg) {
+    struct io_mp_client *client;
+
+    client = arg;
+
+    assert(client->state == IO_MP_CLIENT_STATE_WAITING_RECONNECTION);
+
+    client->reconnection_timer = -1;
+
+    client->state = IO_MP_CLIENT_STATE_INACTIVE;
+
+    if (io_mp_client_connect(client, client->host, client->port) == -1) {
+        io_mp_client_error(client, "cannot reconnect: %s", c_get_error());
+        io_mp_client_reset(client);
+        return;
+    }
 }
 
 /* ------------------------------------------------------------------------
