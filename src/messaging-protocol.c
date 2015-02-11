@@ -41,6 +41,9 @@ io_mp_msg_free(struct io_mp_msg *msg) {
     if (msg->owns_payload)
         c_free(msg->payload);
 
+    if (msg->payload_data)
+        msg->payload_data_free_func(msg->payload_data);
+
     memset(msg, 0, sizeof(struct io_mp_msg));
 }
 
@@ -81,6 +84,16 @@ io_mp_msg_payload(const struct io_mp_msg *msg, size_t *psz) {
         *psz = msg->payload_sz;
 
     return msg->payload;
+}
+
+void
+io_mp_msg_set_payload_data(struct io_mp_msg *msg, void *data,
+                           io_mp_msg_payload_data_free_func free_func) {
+    if (msg->payload_data)
+        msg->payload_data_free_func(msg->payload_data);
+
+    msg->payload_data = data;
+    msg->payload_data_free_func = free_func ? free_func : c_free;
 }
 
 int
@@ -704,8 +717,29 @@ io_mp_connection_on_event_write(struct io_mp_connection *connection) {
 
 int
 io_mp_connection_process_msg(struct io_mp_connection *connection,
-                             const struct io_mp_msg *msg) {
+                             struct io_mp_msg *msg) {
+    io_mp_msg_callback msg_cb;
+    void *msg_cb_arg;
     int ret;
+
+    switch (connection->type) {
+    case IO_MP_CONNECTION_TYPE_CLIENT:
+        msg_cb = connection->u.client.client->msg_cb;
+        msg_cb_arg = connection->u.client.client->msg_cb_arg;
+        break;
+
+    case IO_MP_CONNECTION_TYPE_SERVER:
+        msg_cb = connection->u.server.listener->server->msg_cb;
+        msg_cb_arg = connection->u.server.listener->server->msg_cb_arg;
+        break;
+    }
+
+    if (msg_cb) {
+        msg_cb(connection, msg, msg_cb_arg);
+
+        if (connection->closed)
+            return 0;
+    }
 
     switch (msg->type) {
     case IO_MP_MSG_TYPE_UNUSED:
@@ -826,6 +860,14 @@ io_mp_client_set_event_callback(struct io_mp_client *client,
                                 void *cb_arg) {
     client->event_cb = cb;
     client->event_cb_arg = cb_arg;
+}
+
+void
+io_mp_client_set_msg_callback(struct io_mp_client *client,
+                                io_mp_msg_callback cb,
+                                void *cb_arg) {
+    client->msg_cb = cb;
+    client->msg_cb_arg = cb_arg;
 }
 
 void
@@ -1254,6 +1296,14 @@ io_mp_server_set_event_callback(struct io_mp_server *server,
                                 void *cb_arg) {
     server->event_cb = cb;
     server->event_cb_arg = cb_arg;
+}
+
+void
+io_mp_server_set_msg_callback(struct io_mp_server *server,
+                                io_mp_msg_callback cb,
+                                void *cb_arg) {
+    server->msg_cb = cb;
+    server->msg_cb_arg = cb_arg;
 }
 
 void

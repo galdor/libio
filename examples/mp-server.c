@@ -36,9 +36,9 @@ static void ioex_on_server_event(struct io_mp_connection *,
                                  enum io_mp_connection_event, void *, void *);
 
 static void ioex_on_notification_string(struct io_mp_connection *,
-                                        const struct io_mp_msg *, void *);
+                                        struct io_mp_msg *, void *);
 static void ioex_on_request_random(struct io_mp_connection *,
-                                   const struct io_mp_msg *, void *);
+                                   struct io_mp_msg *, void *);
 
 struct ioex ioex;
 
@@ -137,7 +137,7 @@ ioex_on_server_event(struct io_mp_connection *connection,
 
 static void
 ioex_on_notification_string(struct io_mp_connection *connection,
-                            const struct io_mp_msg *msg, void *arg) {
+                            struct io_mp_msg *msg, void *arg) {
     const char *string;
 
     string = io_mp_msg_payload(msg, NULL);
@@ -147,7 +147,7 @@ ioex_on_notification_string(struct io_mp_connection *connection,
 
 static void
 ioex_on_request_random(struct io_mp_connection *connection,
-                       const struct io_mp_msg *msg, void *arg) {
+                       struct io_mp_msg *msg, void *arg) {
     uint32_t number;
     uint8_t payload[4];
 

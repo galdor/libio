@@ -149,8 +149,10 @@ struct io_mp_msg {
 
     void *payload;
     size_t payload_sz;
-
     bool owns_payload;
+
+    void *payload_data;
+    io_mp_msg_payload_data_free_func payload_data_free_func;
 };
 
 void io_mp_msg_init(struct io_mp_msg *);
@@ -264,8 +266,7 @@ void io_mp_connection_on_event(int, uint32_t, void *);
 int io_mp_connection_on_event_read(struct io_mp_connection *);
 int io_mp_connection_on_event_write(struct io_mp_connection *);
 
-int io_mp_connection_process_msg(struct io_mp_connection *,
-                                 const struct io_mp_msg *);
+int io_mp_connection_process_msg(struct io_mp_connection *, struct io_mp_msg *);
 int io_mp_connection_process_notification_request(struct io_mp_connection *,
                                                   const struct io_mp_msg *);
 int io_mp_connection_process_response(struct io_mp_connection *,
@@ -294,6 +295,8 @@ struct io_mp_client {
 
     io_mp_connection_event_callback event_cb;
     void *event_cb_arg;
+    io_mp_msg_callback msg_cb;
+    void *msg_cb_arg;
 
     struct io_mp_msg_handler *msg_handler;
 };
@@ -341,6 +344,8 @@ struct io_mp_server {
 
     io_mp_connection_event_callback event_cb;
     void *event_cb_arg;
+    io_mp_msg_callback msg_cb;
+    void *msg_cb_arg;
 
     struct io_mp_msg_handler *msg_handler;
 };

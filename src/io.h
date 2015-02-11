@@ -111,6 +111,8 @@ int io_base_read_events(struct io_base *);
 /* Message */
 struct io_mp_msg;
 
+typedef void (*io_mp_msg_payload_data_free_func)(void *);
+
 enum io_mp_msg_type {
     IO_MP_MSG_TYPE_UNUSED       = 0,
     IO_MP_MSG_TYPE_NOTIFICATION = 1,
@@ -125,6 +127,9 @@ enum io_mp_msg_flag {
 uint8_t io_mp_msg_op(const struct io_mp_msg *);
 uint32_t io_mp_msg_id(const struct io_mp_msg *);
 const void *io_mp_msg_payload(const struct io_mp_msg *, size_t *);
+
+void io_mp_msg_set_payload_data(struct io_mp_msg *, void *,
+                                io_mp_msg_payload_data_free_func);
 
 /* Connection */
 struct io_mp_connection;
@@ -141,7 +146,7 @@ typedef void (*io_mp_connection_event_callback)(struct io_mp_connection *,
                                                 void *, void *);
 
 typedef void (*io_mp_msg_callback)(struct io_mp_connection *,
-                                   const struct io_mp_msg *, void *);
+                                   struct io_mp_msg *, void *);
 
 struct io_mp_client *io_mp_connection_client(const struct io_mp_connection *);
 struct io_mp_server *io_mp_connection_server(const struct io_mp_connection *);
@@ -174,6 +179,8 @@ bool io_mp_client_is_connected(const struct io_mp_client *);
 void io_mp_client_set_event_callback(struct io_mp_client *,
                                      io_mp_connection_event_callback,
                                      void *);
+void io_mp_client_set_msg_callback(struct io_mp_client *,
+                                   io_mp_msg_callback, void *);
 
 int io_mp_client_connect(struct io_mp_client *, const char *, uint16_t);
 void io_mp_client_disconnect(struct io_mp_client *);
@@ -191,6 +198,8 @@ void io_mp_server_delete(struct io_mp_server *);
 void io_mp_server_set_event_callback(struct io_mp_server *,
                                      io_mp_connection_event_callback,
                                      void *);
+void io_mp_server_set_msg_callback(struct io_mp_server *,
+                                   io_mp_msg_callback, void *);
 
 int io_mp_server_listen(struct io_mp_server *, const char *, uint16_t);
 
