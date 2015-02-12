@@ -837,6 +837,8 @@ io_mp_client_delete(struct io_mp_client *client) {
     if (!client)
         return;
 
+    io_mp_client_reset(client);
+
     io_mp_msg_handler_delete(client->msg_handler);
 
     c_free0(client, sizeof(struct io_mp_client));
@@ -994,13 +996,26 @@ error:
 }
 
 void
+io_mp_client_close(struct io_mp_client *client) {
+    if (client->connection)
+        io_mp_connection_close(client->connection);
+}
+
+void
 io_mp_client_disconnect(struct io_mp_client *client) {
+    bool signal_connection_lost;
+
+    signal_connection_lost = (client->state == IO_MP_CLIENT_STATE_CONNECTED);
+
     if (client->state == IO_MP_CLIENT_STATE_CONNECTED) {
         io_mp_client_trace(client, "disconnecting");
-        io_mp_client_signal_event(client, IO_MP_CONNECTION_EVENT_LOST, NULL);
+        signal_connection_lost = true;
     }
 
-    io_mp_client_reset(client);
+    io_mp_client_reset(client); /* -> IO_MP_CLIENT_STATE_INACTIVE */
+
+    if (signal_connection_lost)
+        io_mp_client_signal_event(client, IO_MP_CONNECTION_EVENT_LOST, NULL);
 }
 
 void

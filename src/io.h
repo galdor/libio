@@ -183,7 +183,7 @@ void io_mp_client_set_msg_callback(struct io_mp_client *,
                                    io_mp_msg_callback, void *);
 
 int io_mp_client_connect(struct io_mp_client *, const char *, uint16_t);
-void io_mp_client_disconnect(struct io_mp_client *);
+void io_mp_client_close(struct io_mp_client *);
 
 void io_mp_client_bind_op(struct io_mp_client *, uint8_t, enum io_mp_msg_type,
                           io_mp_msg_callback, void *);

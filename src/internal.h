@@ -308,6 +308,7 @@ void io_mp_client_trace(struct io_mp_client *, const char *, ...)
 void io_mp_client_error(struct io_mp_client *, const char *, ...)
     __attribute__ ((format(printf, 2, 3)));
 
+void io_mp_client_disconnect(struct io_mp_client *);
 void io_mp_client_reset(struct io_mp_client *);
 void io_mp_client_schedule_reconnection(struct io_mp_client *);
 

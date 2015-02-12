@@ -72,7 +72,6 @@ main(int argc, char **argv) {
             ioex_die("cannot read events: %s", c_get_error());
     }
 
-    io_mp_client_disconnect(ioex.client);
     io_mp_client_delete(ioex.client);
 
     io_base_delete(ioex.base);
