@@ -73,6 +73,11 @@ io_mp_msg_op(const struct io_mp_msg *msg) {
     return msg->op;
 }
 
+enum io_mp_msg_type
+io_mp_msg_type(const struct io_mp_msg *msg) {
+    return msg->type;
+}
+
 uint32_t
 io_mp_msg_id(const struct io_mp_msg *msg) {
     return msg->id;
