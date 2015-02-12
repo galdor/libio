@@ -268,9 +268,9 @@ int io_mp_connection_on_event_write(struct io_mp_connection *);
 
 int io_mp_connection_process_msg(struct io_mp_connection *, struct io_mp_msg *);
 int io_mp_connection_process_notification_request(struct io_mp_connection *,
-                                                  const struct io_mp_msg *);
+                                                  struct io_mp_msg *);
 int io_mp_connection_process_response(struct io_mp_connection *,
-                                      const struct io_mp_msg *);
+                                      struct io_mp_msg *);
 
 /* Client */
 enum io_mp_client_state {

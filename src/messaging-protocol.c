@@ -761,7 +761,7 @@ io_mp_connection_process_msg(struct io_mp_connection *connection,
 
 int
 io_mp_connection_process_notification_request(struct io_mp_connection *connection,
-                                              const struct io_mp_msg *msg) {
+                                              struct io_mp_msg *msg) {
     const struct io_mp_msg_callback_info *info;
     const struct io_mp_msg_handler *handler;
 
@@ -789,7 +789,7 @@ io_mp_connection_process_notification_request(struct io_mp_connection *connectio
 
 int
 io_mp_connection_process_response(struct io_mp_connection *connection,
-                                  const struct io_mp_msg *msg) {
+                                  struct io_mp_msg *msg) {
     const struct io_mp_msg_callback_info *info;
     struct io_mp_msg_handler *handler;
 
