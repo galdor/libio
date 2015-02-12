@@ -86,6 +86,11 @@ io_mp_msg_payload(const struct io_mp_msg *msg, size_t *psz) {
     return msg->payload;
 }
 
+void *
+io_mp_msg_payload_data(const struct io_mp_msg *msg) {
+    return msg->payload_data;
+}
+
 void
 io_mp_msg_set_payload_data(struct io_mp_msg *msg, void *data,
                            io_mp_msg_payload_data_free_func free_func) {
