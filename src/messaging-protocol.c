@@ -753,7 +753,10 @@ io_mp_connection_process_msg(struct io_mp_connection *connection,
     }
 
     if (msg_cb) {
-        msg_cb(connection, msg, msg_cb_arg);
+        if (msg_cb(connection, msg, msg_cb_arg) == -1) {
+            c_set_error("error while processing message: %s", c_get_error());
+            return -1;
+        }
 
         if (connection->closed)
             return 0;
@@ -822,8 +825,12 @@ io_mp_connection_process_response(struct io_mp_connection *connection,
         return -1;
     }
 
-    if (info->cb)
-        info->cb(connection, msg, info->cb_arg);
+    if (info->cb) {
+        if (info->cb(connection, msg, info->cb_arg) == -1) {
+            c_set_error("error while processing response: %s", c_get_error());
+            return -1;
+        }
+    }
 
     io_mp_response_handler_remove_callback(connection->response_handler,
                                            msg->id);

@@ -147,8 +147,8 @@ typedef void (*io_mp_connection_event_callback)(struct io_mp_connection *,
                                                 enum io_mp_connection_event,
                                                 void *, void *);
 
-typedef void (*io_mp_msg_callback)(struct io_mp_connection *,
-                                   struct io_mp_msg *, void *);
+typedef int (*io_mp_msg_callback)(struct io_mp_connection *,
+                                  struct io_mp_msg *, void *);
 
 struct io_mp_client *io_mp_connection_client(const struct io_mp_connection *);
 struct io_mp_server *io_mp_connection_server(const struct io_mp_connection *);

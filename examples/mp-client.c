@@ -35,10 +35,10 @@ static void ioex_on_signal(int, void *);
 static void ioex_on_client_event(struct io_mp_connection *,
                                  enum io_mp_connection_event, void *, void *);
 
-static void ioex_on_notification_string(struct io_mp_connection *,
-                                        struct io_mp_msg *, void *);
-static void ioex_on_response_random(struct io_mp_connection *,
-                                    struct io_mp_msg *, void *);
+static int ioex_on_notification_string(struct io_mp_connection *,
+                                       struct io_mp_msg *, void *);
+static int ioex_on_response_random(struct io_mp_connection *,
+                                   struct io_mp_msg *, void *);
 
 struct ioex ioex;
 
@@ -137,7 +137,7 @@ ioex_on_client_event(struct io_mp_connection *connection,
     }
 }
 
-static void
+static int
 ioex_on_notification_string(struct io_mp_connection *connection,
                             struct io_mp_msg *msg, void *arg) {
     const char *string;
@@ -145,9 +145,11 @@ ioex_on_notification_string(struct io_mp_connection *connection,
     string = io_mp_msg_payload(msg, NULL);
 
     printf("string: %s\n", string);
+
+    return 0;
 }
 
-static void
+static int
 ioex_on_response_random(struct io_mp_connection *connection,
                         struct io_mp_msg *msg, void *arg) {
     const uint8_t *payload;
@@ -156,8 +158,8 @@ ioex_on_response_random(struct io_mp_connection *connection,
 
     payload = io_mp_msg_payload(msg, &sz);
     if (sz < 4) {
-        fprintf(stderr, "invalid response payload\n");
-        return;
+        c_set_error("invalid response payload");
+        return -1;
     }
 
     number = ((uint32_t)payload[0] << 24)
@@ -166,4 +168,6 @@ ioex_on_response_random(struct io_mp_connection *connection,
            |  (uint32_t)payload[3];
 
     printf("random number: %u\n", number);
+
+    return 0;
 }

@@ -35,10 +35,10 @@ static void ioex_on_signal(int, void *);
 static void ioex_on_server_event(struct io_mp_connection *,
                                  enum io_mp_connection_event, void *, void *);
 
-static void ioex_on_notification_string(struct io_mp_connection *,
-                                        struct io_mp_msg *, void *);
-static void ioex_on_request_random(struct io_mp_connection *,
-                                   struct io_mp_msg *, void *);
+static int ioex_on_notification_string(struct io_mp_connection *,
+                                       struct io_mp_msg *, void *);
+static int ioex_on_request_random(struct io_mp_connection *,
+                                  struct io_mp_msg *, void *);
 
 struct ioex ioex;
 
@@ -134,7 +134,7 @@ ioex_on_server_event(struct io_mp_connection *connection,
     }
 }
 
-static void
+static int
 ioex_on_notification_string(struct io_mp_connection *connection,
                             struct io_mp_msg *msg, void *arg) {
     const char *string;
@@ -142,9 +142,11 @@ ioex_on_notification_string(struct io_mp_connection *connection,
     string = io_mp_msg_payload(msg, NULL);
 
     printf("string: %s\n", string);
+
+    return 0;
 }
 
-static void
+static int
 ioex_on_request_random(struct io_mp_connection *connection,
                        struct io_mp_msg *msg, void *arg) {
     uint32_t number;
@@ -159,6 +161,9 @@ ioex_on_request_random(struct io_mp_connection *connection,
 
     if (io_mp_connection_reply_to_msg(connection, msg, IO_MP_MSG_FLAG_DEFAULT,
                                       payload, sizeof(payload)) == -1) {
-        ioex_die("cannot send response: %s", c_get_error());
+        c_set_error("cannot send response: %s", c_get_error());
+        return -1;
     }
+
+    return 0;
 }
