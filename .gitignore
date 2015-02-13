@@ -5,6 +5,8 @@ session.vim
 .tags
 
 /examples/base-polling
+/examples/mp-client
+/examples/mp-server
 /examples/signals
 /examples/stdin
 /examples/timers
