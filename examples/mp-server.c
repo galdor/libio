@@ -122,9 +122,8 @@ ioex_on_server_event(struct io_mp_connection *connection,
     case IO_MP_CONNECTION_EVENT_ESTABLISHED:
         printf("connection established\n");
 
-        if (io_mp_connection_send_notification(connection,
-                                               1, IO_MP_MSG_FLAG_DEFAULT,
-                                               "hello", 6) == -1) {
+        if (io_mp_connection_notify(connection, 1, IO_MP_MSG_FLAG_DEFAULT,
+                                    "hello", 6) == -1) {
             ioex_die("cannot send message: %s", c_get_error());
         }
         break;
@@ -158,9 +157,8 @@ ioex_on_request_random(struct io_mp_connection *connection,
     payload[2] = (number & 0x0000ff00) >>  8;
     payload[3] =  number & 0x000000ff;
 
-    if (io_mp_connection_send_response_to_msg(connection,
-                                              msg, IO_MP_MSG_FLAG_DEFAULT,
-                                              payload, sizeof(payload)) == -1) {
+    if (io_mp_connection_reply_to_msg(connection, msg, IO_MP_MSG_FLAG_DEFAULT,
+                                      payload, sizeof(payload)) == -1) {
         ioex_die("cannot send response: %s", c_get_error());
     }
 }

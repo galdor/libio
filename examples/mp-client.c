@@ -119,16 +119,14 @@ ioex_on_client_event(struct io_mp_connection *connection,
     case IO_MP_CONNECTION_EVENT_ESTABLISHED:
         printf("connection established\n");
 
-        if (io_mp_connection_send_notification(connection, 1,
-                                               IO_MP_MSG_FLAG_DEFAULT,
-                                               "hello", 6) == -1) {
+        if (io_mp_connection_notify(connection, 1, IO_MP_MSG_FLAG_DEFAULT,
+                                    "hello", 6) == -1) {
             ioex_die("cannot send message: %s", c_get_error());
         }
 
-        if (io_mp_connection_send_request(connection,
-                                          2, IO_MP_MSG_FLAG_DEFAULT,
-                                          NULL, 0,
-                                          ioex_on_response_random, NULL) == -1) {
+        if (io_mp_connection_request(connection, 2, IO_MP_MSG_FLAG_DEFAULT,
+                                     NULL, 0,
+                                     ioex_on_response_random, NULL) == -1) {
             ioex_die("cannot send message: %s", c_get_error());
         }
         break;
