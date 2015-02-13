@@ -205,8 +205,8 @@ io_base_enable_timer_backend(struct io_base *base, struct io_watcher *watcher) {
 
     memset(&its, 0, sizeof(struct itimerspec));
 
-    its.it_value.tv_sec = duration / 1000;
-    its.it_value.tv_nsec = (duration % 1000) * 1000000;
+    its.it_value.tv_sec = (time_t)(duration / 1000);
+    its.it_value.tv_nsec = (long)((duration % 1000) * 1000000);
 
     if (watcher->u.timer.flags & IO_TIMER_RECURRENT) {
         its.it_interval.tv_sec = its.it_value.tv_sec;

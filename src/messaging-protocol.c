@@ -812,11 +812,8 @@ int
 io_mp_connection_process_response(struct io_mp_connection *connection,
                                   struct io_mp_msg *msg) {
     const struct io_mp_msg_callback_info *info;
-    struct io_mp_msg_handler *handler;
 
     assert(msg->type == IO_MP_MSG_TYPE_RESPONSE);
-
-    handler = io_mp_connection_msg_handler(connection);
 
     info = io_mp_response_handler_get_callback(connection->response_handler,
                                                msg->id);
