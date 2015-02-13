@@ -198,5 +198,6 @@ ioex_on_request_random(struct io_mp_connection *connection,
         return -1;
     }
 
+    io_mp_connection_close(connection);
     return 0;
 }

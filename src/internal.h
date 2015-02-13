@@ -234,6 +234,7 @@ enum io_mp_connection_state {
     IO_MP_CONNECTION_STATE_INACTIVE,
     IO_MP_CONNECTION_STATE_SSL_ACCEPTING,
     IO_MP_CONNECTION_STATE_ESTABLISHED,
+    IO_MP_CONNECTION_STATE_CLOSING,
 };
 
 struct io_mp_connection {
@@ -248,7 +249,7 @@ struct io_mp_connection {
     struct c_buffer *rbuf;
     struct c_buffer *wbuf;
 
-    bool closed;
+    bool do_close;
 
     bool ssl_enabled;
     SSL *ssl;
@@ -286,6 +287,7 @@ void io_mp_connection_trace(struct io_mp_connection *, const char *, ...)
     __attribute__ ((format(printf, 2, 3)));
 
 int io_mp_connection_watch_read(struct io_mp_connection *);
+int io_mp_connection_watch_write(struct io_mp_connection *);
 int io_mp_connection_watch_read_write(struct io_mp_connection *);
 
 int io_mp_connection_ssl_accept(struct io_mp_connection *);

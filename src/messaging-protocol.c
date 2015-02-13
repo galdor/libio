@@ -427,7 +427,13 @@ io_mp_connection_server(const struct io_mp_connection *connection) {
 
 void
 io_mp_connection_close(struct io_mp_connection *connection) {
-    connection->closed = true;
+    if (connection->state == IO_MP_CONNECTION_STATE_ESTABLISHED) {
+        /* Close as soon as the write buffer is empty */
+        connection->state = IO_MP_CONNECTION_STATE_CLOSING;
+    } else {
+        /* Close asap */
+        connection->do_close = true;
+    }
 }
 
 struct io_mp_msg_handler *
@@ -486,6 +492,17 @@ int
 io_mp_connection_watch_read(struct io_mp_connection *connection) {
     if (io_base_watch_fd(connection->base, connection->sock,
                          IO_EVENT_FD_READ,
+                         io_mp_connection_on_event, connection) == -1) {
+        c_set_error("cannot watch socket events: %s", c_get_error());
+    }
+
+    return 0;
+}
+
+int
+io_mp_connection_watch_write(struct io_mp_connection *connection) {
+    if (io_base_watch_fd(connection->base, connection->sock,
+                         IO_EVENT_FD_WRITE,
                          io_mp_connection_on_event, connection) == -1) {
         c_set_error("cannot watch socket events: %s", c_get_error());
     }
@@ -625,6 +642,7 @@ io_mp_connection_ssl_write(struct io_mp_connection *connection) {
 int
 io_mp_connection_send_msg(struct io_mp_connection *connection,
                           const struct io_mp_msg *msg) {
+    assert(connection->state == IO_MP_CONNECTION_STATE_ESTABLISHED);
     assert(msg->payload_sz <= UINT32_MAX);
 
     io_mp_msg_encode(msg, connection->wbuf);
@@ -761,7 +779,7 @@ io_mp_connection_on_event(int fd, uint32_t events, void *arg) {
             return;
         }
 
-        if (connection->closed) {
+        if (connection->do_close) {
             io_mp_client_disconnect(client);
             io_mp_client_schedule_reconnection(client);
         }
@@ -778,7 +796,7 @@ io_mp_connection_on_event(int fd, uint32_t events, void *arg) {
             return;
         }
 
-        if (connection->closed)
+        if (connection->do_close)
             io_mp_server_destroy_connection(server, connection);
     }
 }
@@ -786,6 +804,8 @@ io_mp_connection_on_event(int fd, uint32_t events, void *arg) {
 int
 io_mp_connection_on_event_read(struct io_mp_connection *connection) {
     ssize_t ret;
+
+    assert(connection->state == IO_MP_CONNECTION_STATE_ESTABLISHED);
 
     if (connection->ssl_enabled) {
         ret = io_mp_connection_ssl_read(connection);
@@ -798,8 +818,7 @@ io_mp_connection_on_event_read(struct io_mp_connection *connection) {
         return -1;
     } else if (ret == 0) {
         io_mp_connection_trace(connection, "connection closed by peer");
-
-        connection->closed = true;
+        connection->do_close = true;
         return 0;
     }
 
@@ -845,6 +864,9 @@ int
 io_mp_connection_on_event_write(struct io_mp_connection *connection) {
     ssize_t ret;
 
+    assert(connection->state == IO_MP_CONNECTION_STATE_ESTABLISHED
+        || connection->state == IO_MP_CONNECTION_STATE_CLOSING);
+
     if (connection->ssl_enabled) {
         ret = io_mp_connection_ssl_write(connection);
     } else {
@@ -862,6 +884,9 @@ io_mp_connection_on_event_write(struct io_mp_connection *connection) {
     if (c_buffer_length(connection->wbuf) == 0) {
         if (io_mp_connection_watch_read(connection) == -1)
             return -1;
+
+        if (connection->state == IO_MP_CONNECTION_STATE_CLOSING)
+            connection->do_close = true;
     }
 
     return 0;
@@ -892,7 +917,15 @@ io_mp_connection_process_msg(struct io_mp_connection *connection,
             return -1;
         }
 
-        if (connection->closed)
+
+        if (connection->state == IO_MP_CONNECTION_STATE_CLOSING) {
+            if (io_mp_connection_watch_write(connection) == -1)
+                return -1;
+
+            return 0;
+        }
+
+        if (connection->do_close)
             return 0;
     }
 
