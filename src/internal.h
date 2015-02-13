@@ -21,11 +21,16 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <signal.h>
 #include <string.h>
 
 #include <net/if.h>
 #include <netdb.h>
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
 
 #include "io.h"
 
@@ -135,6 +140,19 @@ int io_base_disable_timer_backend(struct io_base *, struct io_watcher *);
 int io_base_read_events_backend(struct io_base *);
 
 /* ------------------------------------------------------------------------
+ *  SSL
+ * ------------------------------------------------------------------------ */
+const char *io_ssl_get_error(void);
+
+DH *io_ssl_dh_load(const char *);
+
+SSL_CTX *io_ssl_ctx_new_client(const char *, const char *);
+SSL_CTX *io_ssl_ctx_new_server(const char *, const char *, const char *,
+                               const char *);
+
+SSL *io_ssl_new(SSL_CTX *, int);
+
+/* ------------------------------------------------------------------------
  *  Messaging protocol
  * ------------------------------------------------------------------------ */
 /* Message */
@@ -212,10 +230,17 @@ enum io_mp_connection_type {
     IO_MP_CONNECTION_TYPE_SERVER
 };
 
+enum io_mp_connection_state {
+    IO_MP_CONNECTION_STATE_INACTIVE,
+    IO_MP_CONNECTION_STATE_SSL_ACCEPTING,
+    IO_MP_CONNECTION_STATE_ESTABLISHED,
+};
+
 struct io_mp_connection {
     struct io_base *base;
 
     enum io_mp_connection_type type;
+    enum io_mp_connection_state state;
 
     struct io_address address;
     int sock;
@@ -224,6 +249,10 @@ struct io_mp_connection {
     struct c_buffer *wbuf;
 
     bool closed;
+
+    bool ssl_enabled;
+    SSL *ssl;
+    size_t ssl_last_write_length;
 
     uint32_t last_msg_id;
 
@@ -259,6 +288,10 @@ void io_mp_connection_trace(struct io_mp_connection *, const char *, ...)
 int io_mp_connection_watch_read(struct io_mp_connection *);
 int io_mp_connection_watch_read_write(struct io_mp_connection *);
 
+int io_mp_connection_ssl_accept(struct io_mp_connection *);
+int io_mp_connection_ssl_read(struct io_mp_connection *);
+int io_mp_connection_ssl_write(struct io_mp_connection *);
+
 int io_mp_connection_send_msg(struct io_mp_connection *,
                               const struct io_mp_msg *);
 
@@ -276,6 +309,7 @@ int io_mp_connection_process_response(struct io_mp_connection *,
 enum io_mp_client_state {
     IO_MP_CLIENT_STATE_INACTIVE,
     IO_MP_CLIENT_STATE_CONNECTING,
+    IO_MP_CLIENT_STATE_SSL_CONNECTING,
     IO_MP_CLIENT_STATE_CONNECTED,
     IO_MP_CLIENT_STATE_WAITING_RECONNECTION,
 };
@@ -292,6 +326,11 @@ struct io_mp_client {
 
     int reconnection_timer;
     uint64_t reconnection_delay;
+
+    bool ssl_enabled;
+    char *ssl_ciphers;
+    char ssl_ca_certificate_path[PATH_MAX];
+    SSL_CTX *ssl_ctx;
 
     io_mp_connection_event_callback event_cb;
     void *event_cb_arg;
@@ -312,7 +351,10 @@ void io_mp_client_disconnect(struct io_mp_client *);
 void io_mp_client_reset(struct io_mp_client *);
 void io_mp_client_schedule_reconnection(struct io_mp_client *);
 
+int io_mp_client_ssl_connect(struct io_mp_client *);
+
 int io_mp_client_on_event(struct io_mp_client *, uint32_t);
+int io_mp_client_on_event_ssl_connecting(struct io_mp_client *);
 int io_mp_client_on_event_write_connecting(struct io_mp_client *);
 void io_mp_client_on_reconnection_timer(int, uint64_t, void *);
 
@@ -340,6 +382,13 @@ struct io_mp_server {
 
     struct io_mp_listener **listeners;
     size_t nb_listeners;
+
+    SSL_CTX *ssl_ctx;
+    bool ssl_enabled;
+    char *ssl_ciphers;
+    char ssl_private_key_path[PATH_MAX];
+    char ssl_certificate_path[PATH_MAX];
+    char ssl_dh_parameters_path[PATH_MAX];
 
     struct c_hash_table *connections; /* fd -> connection */
 

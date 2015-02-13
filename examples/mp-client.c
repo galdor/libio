@@ -47,8 +47,17 @@ main(int argc, char **argv) {
     const char *host;
     uint16_t port;
 
+    bool enable_ssl;
+    const char *ca_certificate_path;
+
     host = "localhost";
     port = 5804;
+
+    enable_ssl = true;
+    ca_certificate_path = "./examples/ca.crt";
+
+    if (enable_ssl)
+        io_ssl_initialize();
 
     ioex.base = io_base_new();
 
@@ -58,6 +67,11 @@ main(int argc, char **argv) {
         ioex_die("cannot watch signal: %s", c_get_error());
 
     ioex.client = io_mp_client_new(ioex.base);
+
+    if (enable_ssl) {
+        if (io_mp_client_enable_ssl(ioex.client, ca_certificate_path) == -1)
+            ioex_die("cannot enable ssl: %s", c_get_error());
+    }
 
     io_mp_client_set_event_callback(ioex.client, ioex_on_client_event, NULL);
 
@@ -75,6 +89,9 @@ main(int argc, char **argv) {
     io_mp_client_delete(ioex.client);
 
     io_base_delete(ioex.base);
+
+    if (enable_ssl)
+        io_ssl_shutdown();
     return 0;
 }
 

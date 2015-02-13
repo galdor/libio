@@ -352,6 +352,8 @@ io_mp_connection_new(void) {
 
     connection = c_malloc0(sizeof(struct io_mp_connection));
 
+    connection->state = IO_MP_CONNECTION_STATE_INACTIVE;
+
     connection->rbuf = c_buffer_new();
     connection->wbuf = c_buffer_new();
 
@@ -392,6 +394,9 @@ void
 io_mp_connection_delete(struct io_mp_connection *connection) {
     if (!connection)
         return;
+
+    if (connection->ssl)
+        SSL_free(connection->ssl);
 
     if (connection->sock >= 0) {
         io_base_unwatch_fd(connection->base, connection->sock);
@@ -497,6 +502,124 @@ io_mp_connection_watch_read_write(struct io_mp_connection *connection) {
     }
 
     return 0;
+}
+
+int
+io_mp_connection_ssl_accept(struct io_mp_connection *connection) {
+    struct io_mp_server *server;
+    int ret;
+
+    assert(connection->state == IO_MP_CONNECTION_STATE_SSL_ACCEPTING);
+    assert(connection->type == IO_MP_CONNECTION_TYPE_SERVER);
+    assert(connection->ssl_enabled);
+
+    server = connection->u.server.listener->server;
+
+    ret = SSL_accept(connection->ssl);
+    if (ret != 1) {
+        int err;
+
+        err = SSL_get_error(connection->ssl, ret);
+
+        switch (err) {
+        case SSL_ERROR_WANT_READ:
+        case SSL_ERROR_WANT_WRITE:
+            return io_mp_connection_watch_read_write(connection);
+
+        default:
+            c_set_error("cannot accept ssl connection: %s", io_ssl_get_error());
+            return -1;
+        }
+    }
+
+    connection->state = IO_MP_CONNECTION_STATE_ESTABLISHED;
+
+    io_mp_server_signal_event(server, connection,
+                              IO_MP_CONNECTION_EVENT_ESTABLISHED, NULL);
+
+    return 0;
+}
+
+int
+io_mp_connection_ssl_read(struct io_mp_connection *connection) {
+    static size_t read_sz = BUFSIZ;
+
+    void *buf;
+    int ret;
+
+    assert(connection->ssl_enabled);
+
+    buf = c_buffer_reserve(connection->rbuf, read_sz);
+
+    ret = SSL_read(connection->ssl, buf, read_sz);
+    if (ret <= 0) {
+        const char *errmsg;
+        int err;
+
+        err = SSL_get_error(connection->ssl, ret);
+
+        switch (err) {
+        case SSL_ERROR_ZERO_RETURN:
+            return 0;
+
+        case SSL_ERROR_SYSCALL:
+            if (errno == 0)
+                return 0;
+
+            errmsg = strerror(errno);
+            break;
+
+        default:
+            errmsg = io_ssl_get_error();
+            break;
+        }
+
+        c_set_error("cannot read ssl data: %s", io_ssl_get_error());
+        return -1;
+    }
+
+    c_buffer_increase_length(connection->rbuf, (size_t)ret);
+    return ret;
+}
+
+int
+io_mp_connection_ssl_write(struct io_mp_connection *connection) {
+    size_t length;
+    int ret;
+
+    assert(connection->ssl_enabled);
+
+    if (connection->ssl_last_write_length > 0) {
+        length = connection->ssl_last_write_length;
+        assert(length >= c_buffer_length(connection->wbuf));
+    } else {
+        length = c_buffer_length(connection->wbuf);
+    }
+
+    ret = SSL_write(connection->ssl, c_buffer_data(connection->wbuf),
+                    c_buffer_length(connection->wbuf));
+    if (ret <= 0) {
+        int err;
+
+        err = SSL_get_error(connection->ssl, ret);
+
+        connection->ssl_last_write_length = length;
+
+        switch (err) {
+        case SSL_ERROR_WANT_READ:
+        case SSL_ERROR_WANT_WRITE:
+            return io_mp_connection_watch_read_write(connection);
+
+        default:
+            c_set_error("cannot write ssl data: %s", io_ssl_get_error());
+            return -1;
+        }
+    }
+
+    c_buffer_skip(connection->wbuf, (size_t)ret);
+
+    connection->ssl_last_write_length = 0;
+    return ret;
 }
 
 int
@@ -664,7 +787,12 @@ int
 io_mp_connection_on_event_read(struct io_mp_connection *connection) {
     ssize_t ret;
 
-    ret = c_buffer_read(connection->rbuf, connection->sock, BUFSIZ);
+    if (connection->ssl_enabled) {
+        ret = io_mp_connection_ssl_read(connection);
+    } else {
+        ret = c_buffer_read(connection->rbuf, connection->sock, BUFSIZ);
+    }
+
     if (ret == -1) {
         c_set_error("cannot read socket: %s", c_get_error());
         return -1;
@@ -717,13 +845,19 @@ int
 io_mp_connection_on_event_write(struct io_mp_connection *connection) {
     ssize_t ret;
 
-    ret = c_buffer_write(connection->wbuf, connection->sock);
+    if (connection->ssl_enabled) {
+        ret = io_mp_connection_ssl_write(connection);
+    } else {
+        ret = c_buffer_write(connection->rbuf, connection->sock);
+    }
+
     if (ret == -1) {
         c_set_error("cannot write to socket: %s", c_get_error());
         return -1;
     }
 
-    io_mp_connection_trace(connection, "%zd bytes written", ret);
+    if (ret > 0)
+        io_mp_connection_trace(connection, "%zd bytes written", ret);
 
     if (c_buffer_length(connection->wbuf) == 0) {
         if (io_mp_connection_watch_read(connection) == -1)
@@ -861,6 +995,10 @@ io_mp_client_delete(struct io_mp_client *client) {
 
     io_mp_client_reset(client);
 
+    if (client->ssl_ctx)
+        SSL_CTX_free(client->ssl_ctx);
+    c_free(client->ssl_ciphers);
+
     io_mp_msg_handler_delete(client->msg_handler);
 
     c_free0(client, sizeof(struct io_mp_client));
@@ -894,6 +1032,55 @@ io_mp_client_set_msg_callback(struct io_mp_client *client,
     client->msg_cb_arg = cb_arg;
 }
 
+int
+io_mp_server_enable_ssl(struct io_mp_server *server,
+                        const char *private_key_path,
+                        const char *certificate_path,
+                        const char *dh_parameters_path) {
+    if (!server->ssl_ciphers)
+        server->ssl_ciphers = c_strdup("HIGH:@STRENGTH");
+
+    if (c_strlcpy(server->ssl_private_key_path, private_key_path,
+                  PATH_MAX) >= PATH_MAX) {
+        c_set_error("private key path too long");
+        return -1;
+    }
+
+    if (c_strlcpy(server->ssl_certificate_path, certificate_path,
+                  PATH_MAX) >= PATH_MAX) {
+        c_set_error("certificate path too long");
+        return -1;
+    }
+
+    if (c_strlcpy(server->ssl_dh_parameters_path, dh_parameters_path,
+                  PATH_MAX) >= PATH_MAX) {
+        c_set_error("dh parameters path too long");
+        return -1;
+    }
+
+    server->ssl_ctx = io_ssl_ctx_new_server(server->ssl_ciphers,
+                                            server->ssl_private_key_path,
+                                            server->ssl_certificate_path,
+                                            server->ssl_dh_parameters_path);
+    if (!server->ssl_ctx) {
+        c_set_error("cannot create ssl context: %s", c_get_error());
+        return -1;
+    }
+
+    io_mp_server_error(server, NULL, "ssl enabled");
+    io_mp_server_error(server, NULL, "using ssl ciphers %s",
+                       server->ssl_ciphers);
+    io_mp_server_error(server, NULL, "using ssl private key from %s",
+                       private_key_path);
+    io_mp_server_error(server, NULL, "using ssl certificate from %s",
+                       certificate_path);
+    io_mp_server_error(server, NULL, "using ssl dh parameters from %s",
+                       dh_parameters_path);
+
+    server->ssl_enabled = true;
+    return 0;
+}
+
 void
 io_mp_client_signal_event(struct io_mp_client *client,
                           enum io_mp_connection_event event, void *data) {
@@ -925,6 +1112,40 @@ io_mp_client_error(struct io_mp_client *client, const char *fmt, ...) {
     va_end(ap);
 
     io_mp_client_signal_event(client, IO_MP_CONNECTION_EVENT_ERROR, msg);
+}
+
+int
+io_mp_client_enable_ssl(struct io_mp_client *client,
+                        const char *ca_certificate_path) {
+    assert(client->state == IO_MP_CLIENT_STATE_INACTIVE);
+
+    if (!client->ssl_ciphers)
+        client->ssl_ciphers = c_strdup("HIGH:@STRENGTH");
+
+    if (c_strlcpy(client->ssl_ca_certificate_path, ca_certificate_path,
+                  PATH_MAX) >= PATH_MAX) {
+        c_set_error("ssl ca path too long");
+        return -1;
+    }
+
+    if (client->ssl_ctx)
+        SSL_CTX_free(client->ssl_ctx);
+
+    client->ssl_ctx = io_ssl_ctx_new_client(client->ssl_ciphers,
+                                            client->ssl_ca_certificate_path);
+    if (!client->ssl_ctx) {
+        c_set_error("cannot create ssl context: %s", c_get_error());
+        return -1;
+    }
+
+    client->ssl_enabled = true;
+
+    io_mp_client_trace(client, "ssl enabled");
+    io_mp_client_trace(client, "using ssl ciphers %s", client->ssl_ciphers);
+    io_mp_client_trace(client, "using ssl ca certificate from %s",
+                       client->ssl_ca_certificate_path);
+
+    return 0;
 }
 
 void
@@ -1006,6 +1227,8 @@ io_mp_client_connect(struct io_mp_client *client,
     client->connection = io_mp_connection_new_client(client, sock);
     memcpy(&client->connection->address, &address, sizeof(struct io_address));
 
+    client->connection->ssl_enabled = client->ssl_enabled;
+
     if (io_mp_connection_watch_read_write(client->connection) == -1)
         goto error;
 
@@ -1015,6 +1238,44 @@ io_mp_client_connect(struct io_mp_client *client,
 error:
     io_mp_client_reset(client);
     return -1;
+}
+
+int
+io_mp_client_ssl_connect(struct io_mp_client *client) {
+    struct io_mp_connection *connection;
+    int ret;
+
+    assert(client->state == IO_MP_CLIENT_STATE_SSL_CONNECTING);
+    assert(client->ssl_enabled);
+
+    connection = client->connection;
+
+    ret = SSL_connect(connection->ssl);
+    if (ret != 1) {
+        int err;
+
+        err = SSL_get_error(connection->ssl, ret);
+
+        switch (err) {
+        case SSL_ERROR_WANT_READ:
+        case SSL_ERROR_WANT_WRITE:
+            if (io_mp_connection_watch_read_write(connection) == -1)
+                return -1;
+            break;
+
+        default:
+            c_set_error("cannot establish ssl connection: %s",
+                        io_ssl_get_error());
+            return -1;
+        }
+    }
+
+    client->state = IO_MP_CLIENT_STATE_CONNECTED;
+    client->connection->state = IO_MP_CONNECTION_STATE_ESTABLISHED;
+
+    io_mp_client_signal_event(client, IO_MP_CONNECTION_EVENT_ESTABLISHED, NULL);
+
+    return 0;
 }
 
 void
@@ -1067,6 +1328,10 @@ io_mp_client_on_event(struct io_mp_client *client, uint32_t events) {
             /* Should not happen */
             break;
 
+        case IO_MP_CLIENT_STATE_SSL_CONNECTING:
+            ret = io_mp_client_on_event_ssl_connecting(client);
+            break;
+
         case IO_MP_CLIENT_STATE_CONNECTED:
             ret = io_mp_connection_on_event_read(client->connection);
             break;
@@ -1081,6 +1346,10 @@ io_mp_client_on_event(struct io_mp_client *client, uint32_t events) {
         case IO_MP_CLIENT_STATE_INACTIVE:
         case IO_MP_CLIENT_STATE_WAITING_RECONNECTION:
             /* Should not happen */
+            break;
+
+        case IO_MP_CLIENT_STATE_SSL_CONNECTING:
+            ret = io_mp_client_on_event_ssl_connecting(client);
             break;
 
         case IO_MP_CLIENT_STATE_CONNECTING:
@@ -1126,10 +1395,30 @@ io_mp_client_on_event_write_connecting(struct io_mp_client *client) {
     io_mp_client_trace(client, "connected to %s",
                        io_address_host_port_string(&connection->address));
 
-    client->state = IO_MP_CLIENT_STATE_CONNECTED;
+    if (client->ssl_enabled) {
+        connection->ssl = io_ssl_new(client->ssl_ctx, connection->sock);
+        if (!connection->ssl) {
+            c_set_error("cannot create ssl connection: %s", c_get_error());
+            return -1;
+        }
 
-    io_mp_client_signal_event(client, IO_MP_CONNECTION_EVENT_ESTABLISHED, NULL);
+        client->state = IO_MP_CLIENT_STATE_SSL_CONNECTING;
+
+        if (io_mp_client_ssl_connect(client) == -1)
+            return -1;
+    } else {
+        client->state = IO_MP_CLIENT_STATE_CONNECTED;
+        connection->state = IO_MP_CONNECTION_STATE_ESTABLISHED;
+
+        io_mp_client_signal_event(client, IO_MP_CONNECTION_EVENT_ESTABLISHED, NULL);
+    }
+
     return 0;
+}
+
+int
+io_mp_client_on_event_ssl_connecting(struct io_mp_client *client) {
+    return io_mp_client_ssl_connect(client);
 }
 
 void
@@ -1270,12 +1559,31 @@ io_mp_listener_on_event(int fd, uint32_t events, void *arg) {
     if (io_mp_connection_watch_read(connection) == -1)
         goto error;
 
+    /* SSL */
+    if (server->ssl_enabled) {
+        connection->ssl = io_ssl_new(server->ssl_ctx, connection->sock);
+        if (!connection->ssl) {
+            c_set_error("cannot create ssl connection: %s", c_get_error());
+            goto error;
+        }
+
+        connection->ssl_enabled = true;
+
+        connection->state = IO_MP_CONNECTION_STATE_SSL_ACCEPTING;
+
+        if (io_mp_connection_ssl_accept(connection) == -1)
+            goto error;
+    } else {
+        connection->state = IO_MP_CONNECTION_STATE_ESTABLISHED;
+    }
+
     /* Register the connection */
     c_hash_table_insert(server->connections,
                         C_INT32_TO_POINTER(connection->sock), connection);
 
     io_mp_server_signal_event(server, connection,
                               IO_MP_CONNECTION_EVENT_ESTABLISHED, NULL);
+
     return;
 
 error:
@@ -1308,6 +1616,10 @@ io_mp_server_delete(struct io_mp_server *server) {
 
     if (!server)
         return;
+
+    if (server->ssl_ctx)
+        SSL_CTX_free(server->ssl_ctx);
+    c_free(server->ssl_ciphers);
 
     it = c_hash_table_iterate(server->connections);
     while (c_hash_table_iterator_next(it, NULL, (void **)&connection) == 1) {
@@ -1446,9 +1758,10 @@ io_mp_server_listen(struct io_mp_server *server,
             goto error;
         }
 
-        io_mp_server_trace(server, NULL, "listening on %s (%s)",
+        io_mp_server_trace(server, NULL, "listening on %s (%s)%s",
                            listener->iface,
-                           io_address_host_port_string(&listener->address));
+                           io_address_host_port_string(&listener->address),
+                           server->ssl_enabled ? " with ssl" : "");
 
         nsz = (server->nb_listeners + 1) * sizeof(struct io_mp_listener *);
         server->listeners = c_realloc(server->listeners, nsz);

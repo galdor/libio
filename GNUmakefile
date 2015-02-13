@@ -13,7 +13,7 @@ CFLAGS+= -Isrc
 
 LDFLAGS+= -L.
 
-LDLIBS+= -lio -lcore -lutest
+LDLIBS+= -lio -lcore -lutest -lcrypto -lssl
 
 PANDOC_OPTS= -s --toc --email-obfuscation=none
 

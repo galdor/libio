@@ -47,8 +47,19 @@ main(int argc, char **argv) {
     const char *iface;
     uint16_t port;
 
+    bool enable_ssl;
+    const char *private_key_path, *certificate_path, *dh_parameters_path;
+
     iface = "lo";
     port = 5804;
+
+    enable_ssl = true;
+    private_key_path = "./examples/libio.key";
+    certificate_path = "./examples/libio.crt";
+    dh_parameters_path = "./examples/libio.dh";
+
+    if (enable_ssl)
+        io_ssl_initialize();
 
     ioex.base = io_base_new();
 
@@ -58,6 +69,13 @@ main(int argc, char **argv) {
         ioex_die("cannot watch signal: %s", c_get_error());
 
     ioex.server = io_mp_server_new(ioex.base);
+
+    if (enable_ssl) {
+        if (io_mp_server_enable_ssl(ioex.server,
+                                    private_key_path, certificate_path,
+                                    dh_parameters_path) == -1)
+            ioex_die("cannot enable ssl: %s", c_get_error());
+    }
 
     io_mp_server_set_event_callback(ioex.server, ioex_on_server_event, NULL);
 
@@ -78,6 +96,9 @@ main(int argc, char **argv) {
 
     io_mp_server_delete(ioex.server);
     io_base_delete(ioex.base);
+
+    if (enable_ssl)
+        io_ssl_shutdown();
     return 0;
 }
 

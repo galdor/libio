@@ -106,6 +106,12 @@ bool io_base_has_watchers(const struct io_base *);
 int io_base_read_events(struct io_base *);
 
 /* ------------------------------------------------------------------------
+ *  SSL
+ * ------------------------------------------------------------------------ */
+void io_ssl_initialize(void);
+void io_ssl_shutdown(void);
+
+/* ------------------------------------------------------------------------
  *  Messaging protocol
  * ------------------------------------------------------------------------ */
 /* Message */
@@ -185,6 +191,8 @@ void io_mp_client_set_event_callback(struct io_mp_client *,
 void io_mp_client_set_msg_callback(struct io_mp_client *,
                                    io_mp_msg_callback, void *);
 
+int io_mp_client_enable_ssl(struct io_mp_client *, const char *);
+
 int io_mp_client_connect(struct io_mp_client *, const char *, uint16_t);
 void io_mp_client_close(struct io_mp_client *);
 
@@ -203,6 +211,9 @@ void io_mp_server_set_event_callback(struct io_mp_server *,
                                      void *);
 void io_mp_server_set_msg_callback(struct io_mp_server *,
                                    io_mp_msg_callback, void *);
+
+int io_mp_server_enable_ssl(struct io_mp_server *,
+                            const char *, const char *, const char *);
 
 int io_mp_server_listen(struct io_mp_server *, const char *, uint16_t);
 
