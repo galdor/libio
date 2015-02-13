@@ -166,8 +166,11 @@ int io_mp_connection_send_request(struct io_mp_connection *,
                                   const void *, size_t,
                                   io_mp_msg_callback, void *);
 int io_mp_connection_send_response(struct io_mp_connection *,
-                                   const struct io_mp_msg *, uint8_t,
+                                   uint8_t, uint32_t, uint8_t,
                                    const void *, size_t);
+int io_mp_connection_send_response_to_msg(struct io_mp_connection *,
+                                          const struct io_mp_msg *, uint8_t,
+                                          const void *, size_t);
 
 /* Client */
 struct io_mp_client;

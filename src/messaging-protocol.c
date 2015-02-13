@@ -588,17 +588,16 @@ io_mp_connection_send_request(struct io_mp_connection *connection,
 
 int
 io_mp_connection_send_response(struct io_mp_connection *connection,
-                               const struct io_mp_msg *request_msg,
-                               uint8_t flags,
+                               uint8_t op, uint32_t id, uint8_t flags,
                                const void *payload, size_t payload_sz) {
     struct io_mp_msg msg;
 
     io_mp_msg_init(&msg);
 
-    msg.op = request_msg->op;
+    msg.op = op;
     msg.type = IO_MP_MSG_TYPE_RESPONSE;
     msg.flags = flags;
-    msg.id = request_msg->id;
+    msg.id = id;
 
     msg.payload = (void *)payload;
     msg.payload_sz = payload_sz;
@@ -610,6 +609,16 @@ io_mp_connection_send_response(struct io_mp_connection *connection,
 
     io_mp_msg_free(&msg);
     return 0;
+}
+
+int
+io_mp_connection_send_response_to_msg(struct io_mp_connection *connection,
+                                      const struct io_mp_msg *request_msg,
+                                      uint8_t flags,
+                                      const void *payload, size_t payload_sz) {
+    return io_mp_connection_send_response(connection,
+                                          request_msg->op, request_msg->id,
+                                          flags, payload, payload_sz);
 }
 
 void
