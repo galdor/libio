@@ -44,6 +44,8 @@ struct ioex ioex;
 
 int
 main(int argc, char **argv) {
+    struct c_command_line *cmdline;
+
     const char *iface;
     uint16_t port;
 
@@ -53,10 +55,18 @@ main(int argc, char **argv) {
     iface = "lo";
     port = 5804;
 
-    enable_ssl = true;
+    enable_ssl = false;
     private_key_path = "./examples/libio.key";
     certificate_path = "./examples/libio.crt";
     dh_parameters_path = "./examples/libio.dh";
+
+    cmdline = c_command_line_new();
+    c_command_line_add_flag(cmdline, "s", "ssl", "enable ssl");
+
+    if (c_command_line_parse(cmdline, argc, argv) == -1)
+        ioex_die("%s", c_get_error());
+
+    enable_ssl = c_command_line_is_option_set(cmdline, "ssl");
 
     if (enable_ssl)
         io_ssl_initialize();
@@ -99,6 +109,8 @@ main(int argc, char **argv) {
 
     if (enable_ssl)
         io_ssl_shutdown();
+
+    c_command_line_delete(cmdline);
     return 0;
 }
 
