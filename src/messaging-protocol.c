@@ -848,7 +848,7 @@ io_mp_connection_on_event_write(struct io_mp_connection *connection) {
     if (connection->ssl_enabled) {
         ret = io_mp_connection_ssl_write(connection);
     } else {
-        ret = c_buffer_write(connection->rbuf, connection->sock);
+        ret = c_buffer_write(connection->wbuf, connection->sock);
     }
 
     if (ret == -1) {
