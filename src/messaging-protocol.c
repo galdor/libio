@@ -950,10 +950,10 @@ io_mp_connection_process_msg(struct io_mp_connection *connection,
 
     if (msg_cb) {
         if (msg_cb(connection, msg, msg_cb_arg) == -1) {
-            c_set_error("error while processing message: %s", c_get_error());
+            c_set_error("error while processing message 0x%02x: %s",
+                        msg->op, c_get_error());
             return -1;
         }
-
 
         if (connection->state == IO_MP_CONNECTION_STATE_CLOSING)
             return 0;
@@ -1003,10 +1003,15 @@ io_mp_connection_process_notification_request(struct io_mp_connection *connectio
     }
 
     if (info->cb(connection, msg, info->cb_arg) == -1) {
-        c_set_error("error while processing %s: %s",
-                    (msg->type == IO_MP_MSG_TYPE_NOTIFICATION)
-                        ? "notification" : "request",
-                    c_get_error());
+        const char *type_string;
+
+        if (msg->type == IO_MP_MSG_TYPE_NOTIFICATION) {
+            type_string = "notification";
+        } else {
+            type_string = "request";
+        }
+        c_set_error("error while processing %s 0x%02x: %s",
+                    type_string, msg->op, c_get_error());
         return -1;
     }
 
@@ -1029,7 +1034,8 @@ io_mp_connection_process_response(struct io_mp_connection *connection,
 
     if (info->cb) {
         if (info->cb(connection, msg, info->cb_arg) == -1) {
-            c_set_error("error while processing response: %s", c_get_error());
+            c_set_error("error while processing response 0x%02x: %s",
+                        msg->op, c_get_error());
             return -1;
         }
     }
