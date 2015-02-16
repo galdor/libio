@@ -822,7 +822,9 @@ io_mp_connection_on_event_read(struct io_mp_connection *connection) {
         return 0;
     }
 
+#if 0
     io_mp_connection_trace(connection, "%zd bytes read", ret);
+#endif
 
     for (;;) {
         struct io_mp_msg msg;
@@ -844,7 +846,7 @@ io_mp_connection_on_event_read(struct io_mp_connection *connection) {
         }
 
         io_mp_connection_trace(connection,
-                               "msg: op %#02x, type %u, id %#08x payload sz %zu",
+                               "msg: op 0x%02x, type %u, id 0x%08x payload sz %zu",
                                msg.op, msg.type, msg.id, msg.payload_sz);
 
         if (io_mp_connection_process_msg(connection, &msg) == -1) {
@@ -878,8 +880,10 @@ io_mp_connection_on_event_write(struct io_mp_connection *connection) {
         return -1;
     }
 
+#if 0
     if (ret > 0)
         io_mp_connection_trace(connection, "%zd bytes written", ret);
+#endif
 
     if (c_buffer_length(connection->wbuf) == 0) {
         if (io_mp_connection_watch_read(connection) == -1)
@@ -960,7 +964,7 @@ io_mp_connection_process_notification_request(struct io_mp_connection *connectio
 
     info = io_mp_msg_handler_get_callback(handler, msg->op);
     if (!info) {
-        c_set_error("unhandled op %#02x", msg->op);
+        c_set_error("unhandled op 0x%02x", msg->op);
         return -1;
     }
 
