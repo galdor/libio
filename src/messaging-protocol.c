@@ -973,8 +973,13 @@ io_mp_connection_process_notification_request(struct io_mp_connection *connectio
         return -1;
     }
 
-    if (info->cb)
-        info->cb(connection, msg, info->cb_arg);
+    if (info->cb(connection, msg, info->cb_arg) == -1) {
+        c_set_error("error while processing %s: %s",
+                    (msg->type == IO_MP_MSG_TYPE_NOTIFICATION)
+                        ? "notification" : "request",
+                    c_get_error());
+        return -1;
+    }
 
     return 0;
 }
