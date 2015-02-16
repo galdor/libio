@@ -1365,9 +1365,7 @@ void
 io_mp_client_disconnect(struct io_mp_client *client) {
     bool is_connected;
 
-    is_connected = (client->state == IO_MP_CLIENT_STATE_CONNECTED
-                 && client->connection
-                 && !client->connection->do_close);
+    is_connected = (client->state == IO_MP_CLIENT_STATE_CONNECTED);
 
     if (is_connected)
         io_mp_client_trace(client, "disconnecting");

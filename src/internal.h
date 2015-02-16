@@ -160,8 +160,8 @@ SSL *io_ssl_new(SSL_CTX *, int);
 
 struct io_mp_msg {
     uint8_t op;
-    uint8_t type    :  2; /* enum io_mp_msg_type */
-    uint8_t flags   :  6; /* enum io_mp_msg_flag */
+    uint8_t type  :  2; /* enum io_mp_msg_type */
+    uint8_t flags :  6; /* enum io_mp_msg_flag */
 
     uint32_t id;
 
