@@ -285,6 +285,8 @@ int io_mp_connection_get_socket_error(struct io_mp_connection *, int *);
 
 void io_mp_connection_trace(struct io_mp_connection *, const char *, ...)
     __attribute__ ((format(printf, 2, 3)));
+void io_mp_connection_error(struct io_mp_connection *, const char *, ...)
+    __attribute__ ((format(printf, 2, 3)));
 
 int io_mp_connection_watch_read(struct io_mp_connection *);
 int io_mp_connection_watch_write(struct io_mp_connection *);

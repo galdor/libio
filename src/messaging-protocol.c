@@ -428,7 +428,19 @@ io_mp_connection_server(const struct io_mp_connection *connection) {
 void
 io_mp_connection_close(struct io_mp_connection *connection) {
     if (connection->state == IO_MP_CONNECTION_STATE_ESTABLISHED) {
-        /* Close as soon as the write buffer is empty */
+        if (io_mp_connection_watch_write(connection) == -1) {
+            io_mp_connection_error(connection, "%s", c_get_error());
+            connection->do_close = true;
+            return;
+        }
+
+        if (shutdown(connection->sock, SHUT_RD) == -1) {
+            io_mp_connection_error(connection, "cannot shut socket down: %s",
+                                   strerror(errno));
+            connection->do_close = true;
+            return;
+        }
+
         connection->state = IO_MP_CONNECTION_STATE_CLOSING;
     } else {
         /* Close asap */
@@ -485,6 +497,27 @@ io_mp_connection_trace(struct io_mp_connection *connection,
         listener = connection->u.server.listener;
 
         io_mp_server_trace(listener->server, connection, "%s", msg);
+    }
+}
+
+void
+io_mp_connection_error(struct io_mp_connection *connection,
+                       const char *fmt, ...) {
+    char msg[C_ERROR_BUFSZ];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(msg, C_ERROR_BUFSZ, fmt, ap);
+    va_end(ap);
+
+    if (connection->type == IO_MP_CONNECTION_TYPE_CLIENT) {
+        io_mp_client_error(connection->u.client.client, "%s", msg);
+    } else if (connection->type == IO_MP_CONNECTION_TYPE_SERVER) {
+        struct io_mp_listener *listener;
+
+        listener = connection->u.server.listener;
+
+        io_mp_server_error(listener->server, connection, "%s", msg);
     }
 }
 
@@ -792,7 +825,7 @@ io_mp_connection_on_event(int fd, uint32_t events, void *arg) {
 
         if (io_mp_server_on_event(server, connection, events) == -1) {
             io_mp_server_error(server, connection, "%s", c_get_error());
-            io_mp_server_destroy_connection(server, connection);
+            io_mp_connection_close(connection);
             return;
         }
 
@@ -922,12 +955,8 @@ io_mp_connection_process_msg(struct io_mp_connection *connection,
         }
 
 
-        if (connection->state == IO_MP_CONNECTION_STATE_CLOSING) {
-            if (io_mp_connection_watch_write(connection) == -1)
-                return -1;
-
+        if (connection->state == IO_MP_CONNECTION_STATE_CLOSING)
             return 0;
-        }
 
         if (connection->do_close)
             return 0;
@@ -1328,18 +1357,18 @@ io_mp_client_close(struct io_mp_client *client) {
 
 void
 io_mp_client_disconnect(struct io_mp_client *client) {
-    bool signal_connection_lost;
+    bool is_connected;
 
-    signal_connection_lost = (client->state == IO_MP_CLIENT_STATE_CONNECTED);
+    is_connected = (client->state == IO_MP_CLIENT_STATE_CONNECTED
+                 && client->connection
+                 && !client->connection->do_close);
 
-    if (client->state == IO_MP_CLIENT_STATE_CONNECTED) {
+    if (is_connected)
         io_mp_client_trace(client, "disconnecting");
-        signal_connection_lost = true;
-    }
 
     io_mp_client_reset(client); /* -> IO_MP_CLIENT_STATE_INACTIVE */
 
-    if (signal_connection_lost)
+    if (is_connected)
         io_mp_client_signal_event(client, IO_MP_CONNECTION_EVENT_LOST, NULL);
 }
 
