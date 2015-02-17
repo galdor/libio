@@ -195,8 +195,8 @@ ioex_on_request_random(struct io_mp_connection *connection,
     payload[2] = (number & 0x0000ff00) >>  8;
     payload[3] =  number & 0x000000ff;
 
-    if (io_mp_connection_reply_to_msg(connection, msg, IO_MP_MSG_FLAG_DEFAULT,
-                                      payload, sizeof(payload)) == -1) {
+    if (io_mp_connection_reply(connection, msg, IO_MP_MSG_FLAG_DEFAULT,
+                               payload, sizeof(payload)) == -1) {
         c_set_error("cannot send response: %s", c_get_error());
         return -1;
     }

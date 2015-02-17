@@ -170,12 +170,12 @@ int io_mp_connection_notify(struct io_mp_connection *, uint8_t, uint8_t,
 int io_mp_connection_request(struct io_mp_connection *, uint8_t, uint8_t,
                              const void *, size_t,
                              io_mp_msg_callback, void *);
+int io_mp_connection_reply2(struct io_mp_connection *,
+                            uint8_t, uint32_t, uint8_t,
+                            const void *, size_t);
 int io_mp_connection_reply(struct io_mp_connection *,
-                           uint8_t, uint32_t, uint8_t,
+                           const struct io_mp_msg *, uint8_t,
                            const void *, size_t);
-int io_mp_connection_reply_to_msg(struct io_mp_connection *,
-                                  const struct io_mp_msg *, uint8_t,
-                                  const void *, size_t);
 
 /* Client */
 struct io_mp_client;
