@@ -145,6 +145,10 @@ ioex_on_client_event(struct io_mp_connection *connection,
         fprintf(stderr, "error: %s\n", (const char *)data);
         break;
 
+    case IO_MP_CONNECTION_EVENT_FAILED:
+        fprintf(stderr, "connection failed: %s\n", (const char *)data);
+        break;
+
     case IO_MP_CONNECTION_EVENT_ESTABLISHED:
         printf("connection established\n");
 

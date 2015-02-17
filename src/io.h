@@ -145,6 +145,7 @@ struct io_mp_connection;
 enum io_mp_connection_event {
     IO_MP_CONNECTION_EVENT_TRACE,
     IO_MP_CONNECTION_EVENT_ERROR,
+    IO_MP_CONNECTION_EVENT_FAILED, /* client only */
     IO_MP_CONNECTION_EVENT_ESTABLISHED,
     IO_MP_CONNECTION_EVENT_LOST,
 };

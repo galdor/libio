@@ -164,6 +164,9 @@ ioex_on_server_event(struct io_mp_connection *connection,
     case IO_MP_CONNECTION_EVENT_LOST:
         printf("connection lost\n");
         break;
+
+    default:
+        break;
     }
 }
 

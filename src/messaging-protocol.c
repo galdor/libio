@@ -1460,7 +1460,8 @@ io_mp_client_on_event_write_connecting(struct io_mp_client *client) {
                     io_address_host_port_string(&connection->address),
                     strerror(err));
 
-        io_mp_client_trace(client, "connection failed");
+        io_mp_client_signal_event(client, IO_MP_CONNECTION_EVENT_FAILED,
+                                  strerror(err));
         return -1;
     }
 
