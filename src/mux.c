@@ -225,6 +225,7 @@ io_watcher_array_get(const struct io_watcher_array *array, int id) {
 /* ------------------------------------------------------------------------
  *  Base
  * ------------------------------------------------------------------------ */
+static void io_base_on_sigchld(int, void *);
 static int io_cmp_timer_ids(const void *, const void *);
 
 struct io_base *
@@ -429,6 +430,46 @@ io_base_is_signal_watched(const struct io_base *base, int signo) {
 }
 
 int
+io_base_watch_sigchld(struct io_base *base) {
+    return io_base_watch_signal(base, SIGCHLD, io_base_on_sigchld, base);
+}
+
+int
+io_base_unwatch_sigchld(struct io_base *base) {
+    return io_base_unwatch_signal(base, SIGCHLD);
+}
+
+int
+io_base_block_sigchld(struct io_base *base) {
+    sigset_t set;
+
+    sigemptyset(&set);
+    sigaddset(&set, SIGCHLD);
+
+    if (sigprocmask(SIG_BLOCK, &set, NULL) == -1) {
+        c_set_error("%s", strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+int
+io_base_unblock_sigchld(struct io_base *base) {
+    sigset_t set;
+
+    sigemptyset(&set);
+    sigaddset(&set, SIGCHLD);
+
+    if (sigprocmask(SIG_UNBLOCK, &set, NULL) == -1) {
+        c_set_error("%s", strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+int
 io_base_add_timer(struct io_base *base, uint64_t duration, uint32_t flags,
                   io_timer_callback cb, void *arg) {
     struct io_watcher *watcher;
@@ -547,55 +588,6 @@ io_base_is_child_watched(const struct io_base *base, pid_t pid) {
     return c_hash_table_contains(base->child_watchers, &pid);
 }
 
-void
-io_base_sigchld_handler(int signo, void *arg) {
-    struct io_base *base;
-
-    assert(signo == SIGCHLD);
-
-    base = arg;
-
-    for (;;) {
-        struct io_watcher *watcher;
-        int status, event_value;
-        enum io_event event;
-        pid_t pid;
-
-        pid = waitpid((pid_t)-1, &status, WCONTINUED | WNOHANG);
-        if (pid == -1) {
-            if (errno == ECHILD)
-                break;
-
-            /* TODO signal error */
-            return;
-        }
-
-        if (c_hash_table_get(base->child_watchers, &pid,
-                             (void **)&watcher) == 0) {
-            continue;
-        }
-
-        if (WIFEXITED(status)) {
-            event = IO_EVENT_CHILD_EXITED;
-            event_value = WEXITSTATUS(status);
-        } else if (WIFSIGNALED(status)) {
-            event = IO_EVENT_CHILD_SIGNALED;
-            event_value = WTERMSIG(status);
-        } else {
-            event = IO_EVENT_CHILD_ABORTED;
-            event_value = 0;
-        }
-
-        watcher->u.child.event_value = event_value;
-
-        io_watcher_on_events(watcher, event);
-
-        if (io_base_unwatch_child(base, pid) == -1) {
-            /* TODO signal error */
-        }
-    }
-}
-
 bool
 io_base_has_watchers(const struct io_base *base) {
     bool has_fd_watcher, has_signal_watcher, has_timer_watcher;
@@ -640,6 +632,55 @@ io_base_release_timer_id(struct io_base *base, int id) {
         base->last_timer_id--;
     } else {
         c_heap_add(base->free_timer_ids, C_INT32_TO_POINTER(id));
+    }
+}
+
+static void
+io_base_on_sigchld(int signo, void *arg) {
+    struct io_base *base;
+
+    assert(signo == SIGCHLD);
+
+    base = arg;
+
+    for (;;) {
+        struct io_watcher *watcher;
+        int status, event_value;
+        enum io_event event;
+        pid_t pid;
+
+        pid = waitpid((pid_t)-1, &status, WNOHANG);
+        if (pid == -1) {
+            if (errno == ECHILD)
+                break;
+
+            /* TODO signal error */
+            return;
+        }
+
+        if (c_hash_table_get(base->child_watchers, &pid,
+                             (void **)&watcher) == 0) {
+            continue;
+        }
+
+        if (WIFEXITED(status)) {
+            event = IO_EVENT_CHILD_EXITED;
+            event_value = WEXITSTATUS(status);
+        } else if (WIFSIGNALED(status)) {
+            event = IO_EVENT_CHILD_SIGNALED;
+            event_value = WTERMSIG(status);
+        } else {
+            event = IO_EVENT_CHILD_ABORTED;
+            event_value = 0;
+        }
+
+        watcher->u.child.event_value = event_value;
+
+        io_watcher_on_events(watcher, event);
+
+        if (io_base_unwatch_child(base, pid) == -1) {
+            /* TODO signal error */
+        }
     }
 }
 

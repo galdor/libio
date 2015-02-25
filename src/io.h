@@ -105,6 +105,10 @@ bool io_base_is_fd_watched(const struct io_base *, int);
 int io_base_watch_signal(struct io_base *, int, io_signal_callback, void *);
 int io_base_unwatch_signal(struct io_base *, int);
 bool io_base_is_signal_watched(const struct io_base *, int);
+int io_base_watch_sigchld(struct io_base *);
+int io_base_unwatch_sigchld(struct io_base *);
+int io_base_block_sigchld(struct io_base *);
+int io_base_unblock_sigchld(struct io_base *);
 
 int io_base_add_timer(struct io_base *, uint64_t, uint32_t,
                       io_timer_callback, void *);
