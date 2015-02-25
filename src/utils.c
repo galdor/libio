@@ -25,7 +25,7 @@ io_hash_uint64_ptr(const void *key) {
     bytes = key;
 
     hash = 5381;
-    for (int i = 0; i < 8; i++)
+    for (size_t i = 0; i < 8; i++)
         hash = ((hash << 5) + hash) ^ bytes[i];
 
     return hash;
@@ -39,4 +39,28 @@ io_equal_uint64_ptr(const void *k1, const void *k2) {
     u2 = *(uint64_t *)k2;
 
     return u1 == u2;
+}
+
+uint32_t
+io_hash_pid_ptr(const void *arg) {
+    const uint8_t *data;
+    uint32_t hash;
+
+    data = (const uint8_t *)arg;
+
+    hash = 5381;
+    for (size_t i = 0; i < sizeof(pid_t); i++)
+        hash = ((hash << 5) + hash) ^ data[i];
+
+    return hash;
+}
+
+bool
+io_equal_pid_ptr(const void *arg1, const void *arg2) {
+    pid_t pid1, pid2;
+
+    pid1 = *(pid_t *)arg1;
+    pid2 = *(pid_t *)arg2;
+
+    return pid1 == pid2;
 }

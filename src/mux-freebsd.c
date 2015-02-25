@@ -32,12 +32,9 @@ void
 io_watcher_free_backend(struct io_watcher *watcher) {
     switch (watcher->type) {
     case IO_WATCHER_FD:
-        break;
-
     case IO_WATCHER_SIGNAL:
-        break;
-
     case IO_WATCHER_TIMER:
+    case IO_WATCHER_CHILD:
         break;
     }
 }
@@ -294,6 +291,9 @@ io_base_read_events_backend(struct io_base *base) {
     case IO_WATCHER_TIMER:
         if (event.filter == EVFILT_TIMER)
             events |= IO_EVENT_TIMER_EXPIRED;
+        break;
+
+    case IO_WATCHER_CHILD:
         break;
     }
 

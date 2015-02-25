@@ -18,6 +18,7 @@
 #include <limits.h>
 
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include "internal.h"
 
@@ -102,11 +103,26 @@ io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
             }
         }
         break;
+
+    case IO_WATCHER_CHILD:
+        watcher->in_callback = true;
+        if (watcher->u.child.cb) {
+            watcher->u.child.cb(watcher->u.child.pid, events,
+                                watcher->u.child.event_value, watcher->cb_arg);
+        }
+        watcher->in_callback = false;
+        break;
     }
 
     if (!watcher->enabled) {
         /* The watcher was disabled in the callback */
-        io_watcher_array_remove(array, id);
+        if (watcher->type == IO_WATCHER_CHILD) {
+            c_hash_table_remove(watcher->base->child_watchers,
+                                &watcher->u.child.pid);
+        } else {
+            io_watcher_array_remove(array, id);
+        }
+
         if (watcher->type == IO_WATCHER_TIMER)
             io_base_release_timer_id(watcher->base, watcher->u.timer.id);
 
@@ -206,6 +222,7 @@ io_watcher_array_get(const struct io_watcher_array *array, int id) {
  *  Base
  * ------------------------------------------------------------------------ */
 static int io_cmp_timer_ids(const void *, const void *);
+static void io_base_on_sigchld(int, void *);
 
 struct io_base *
 io_base_new(void) {
@@ -221,6 +238,7 @@ io_base_new(void) {
     io_watcher_array_init(&base->fd_watchers);
     io_watcher_array_init(&base->signal_watchers);
     io_watcher_array_init(&base->timer_watchers);
+    base->child_watchers = c_hash_table_new(io_hash_pid_ptr, io_equal_pid_ptr);
 
     base->free_timer_ids = c_heap_new(io_cmp_timer_ids);
 
@@ -229,12 +247,21 @@ io_base_new(void) {
 
 void
 io_base_delete(struct io_base *base) {
+    struct c_hash_table_iterator *it;
+    struct io_watcher *watcher;
+
     if (!base)
         return;
 
     io_watcher_array_free(&base->fd_watchers);
     io_watcher_array_free(&base->signal_watchers);
     io_watcher_array_free(&base->timer_watchers);
+
+    it = c_hash_table_iterate(base->child_watchers);
+    while (c_hash_table_iterator_next(it, NULL, (void **)&watcher) == 1)
+        io_watcher_delete(watcher);
+    c_hash_table_iterator_delete(it);
+    c_hash_table_delete(base->child_watchers);
 
     c_heap_delete(base->free_timer_ids);
 
@@ -452,6 +479,62 @@ io_base_remove_timer(struct io_base *base, int id) {
     return 0;
 }
 
+int
+io_base_watch_child(struct io_base *base, pid_t pid,
+                    io_child_callback cb, void *cb_arg) {
+    struct io_watcher *watcher;
+
+    assert(pid != (pid_t)-1);
+
+    if (c_hash_table_get(base->child_watchers, &pid, (void **)&watcher) == 1) {
+        watcher->u.child.cb = cb;
+        watcher->cb_arg = cb_arg;
+
+        return 0;
+    }
+
+    watcher = io_watcher_new(base, IO_WATCHER_CHILD);
+
+    watcher->events = IO_EVENT_CHILD_EXITED | IO_EVENT_CHILD_SIGNALED
+                    | IO_EVENT_CHILD_ABORTED;
+    watcher->cb_arg = cb_arg;
+
+    watcher->u.child.pid = pid;
+    watcher->u.child.cb = cb;
+
+    if (io_base_watch_signal(base, SIGCHLD, io_base_on_sigchld, base) == -1) {
+        c_set_error("cannot watch SIGCHLD: %s", c_get_error());
+        io_watcher_delete(watcher);
+        return -1;
+    }
+
+    watcher->registered = true;
+    watcher->enabled = true;
+
+    c_hash_table_insert(base->child_watchers, &watcher->u.child.pid, watcher);
+    return 0;
+}
+
+int
+io_base_unwatch_child(struct io_base *base, pid_t pid) {
+    struct io_watcher *watcher;
+
+    assert(pid != (pid_t)-1);
+
+    if (c_hash_table_get(base->child_watchers, &pid, (void **)&watcher) == 0) {
+        c_set_error("no watcher found");
+        return -1;
+    }
+
+    watcher->enabled = false;
+    if (!watcher->in_callback) {
+        c_hash_table_remove(base->child_watchers, &pid);
+        io_watcher_delete(watcher);
+    }
+
+    return 0;
+}
+
 bool
 io_base_has_watchers(const struct io_base *base) {
     return base->fd_watchers.nb_watchers > 0
@@ -505,5 +588,56 @@ io_cmp_timer_ids(const void *e1, const void *e2) {
         return 1;
     } else {
         return 0;
+    }
+}
+
+static void
+io_base_on_sigchld(int signo, void *arg) {
+    struct io_base *base;
+
+    assert(signo == SIGCHLD);
+
+    base = arg;
+
+    for (;;) {
+        struct io_watcher *watcher;
+        int status, event_value;
+        enum io_event event;
+        pid_t pid;
+
+        pid = waitpid((pid_t)-1, &status, WCONTINUED | WNOHANG);
+        if (pid == -1) {
+            if (errno == ECHILD)
+                break;
+
+            /* TODO signal error */
+            return;
+        }
+
+        if (c_hash_table_get(base->child_watchers, &pid,
+                             (void **)&watcher) == 0) {
+            continue;
+        }
+
+        if (WIFEXITED(status)) {
+            event = IO_EVENT_CHILD_EXITED;
+            event_value = WEXITSTATUS(status);
+        } else if (WIFSIGNALED(status)) {
+            event = IO_EVENT_CHILD_SIGNALED;
+            event_value = WTERMSIG(status);
+        } else {
+            event = IO_EVENT_CHILD_ABORTED;
+            event_value = 0;
+        }
+
+        watcher->u.child.event_value = event_value;
+
+        if (io_watcher_on_events(watcher, event) == -1) {
+            /* TODO signal error */
+        }
+
+        if (io_base_unwatch_child(base, pid) == -1) {
+            /* TODO signal error */
+        }
     }
 }

@@ -42,6 +42,9 @@ io_watcher_free_backend(struct io_watcher *watcher) {
         if (watcher->u.timer.fd >= 0)
             close(watcher->u.timer.fd);
         break;
+
+    case IO_WATCHER_CHILD:
+        break;
     }
 }
 
@@ -318,6 +321,9 @@ io_base_read_events_backend(struct io_base *base) {
 
             events |= IO_EVENT_TIMER_EXPIRED;
         }
+        break;
+
+    case IO_WATCHER_CHILD:
         break;
     }
 

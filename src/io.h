@@ -19,6 +19,7 @@
 #define LIBIO_IO_H
 
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #include <core.h>
 
@@ -81,11 +82,16 @@ enum io_event {
     IO_EVENT_SIGNAL_RECEIVED = (1 << 3),
 
     IO_EVENT_TIMER_EXPIRED   = (1 << 4),
+
+    IO_EVENT_CHILD_EXITED    = (1 << 5),
+    IO_EVENT_CHILD_SIGNALED  = (1 << 6),
+    IO_EVENT_CHILD_ABORTED   = (1 << 7),
 };
 
 typedef void (*io_signal_callback)(int, void *);
 typedef void (*io_fd_callback)(int, uint32_t, void *);
 typedef void (*io_timer_callback)(int, uint64_t, void *);
+typedef void (*io_child_callback)(pid_t, uint32_t, int, void *);
 
 struct io_base *io_base_new(void);
 void io_base_delete(struct io_base *);
@@ -101,6 +107,9 @@ int io_base_unwatch_signal(struct io_base *, int);
 int io_base_add_timer(struct io_base *, uint64_t, uint32_t,
                       io_timer_callback, void *);
 int io_base_remove_timer(struct io_base *, int);
+
+int io_base_watch_child(struct io_base *, pid_t, io_child_callback, void *);
+int io_base_unwatch_child(struct io_base *, pid_t);
 
 bool io_base_has_watchers(const struct io_base *);
 int io_base_read_events(struct io_base *);

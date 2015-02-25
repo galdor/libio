@@ -42,6 +42,7 @@ enum io_watcher_type {
     IO_WATCHER_FD,
     IO_WATCHER_SIGNAL,
     IO_WATCHER_TIMER,
+    IO_WATCHER_CHILD,
 };
 
 struct io_watcher {
@@ -86,6 +87,12 @@ struct io_watcher {
             int fd;
 #endif
         } timer;
+
+        struct {
+            pid_t pid;
+            io_child_callback cb;
+            int event_value;
+        } child;
     } u;
 };
 
@@ -117,6 +124,7 @@ struct io_base {
     struct io_watcher_array fd_watchers;
     struct io_watcher_array signal_watchers;
     struct io_watcher_array timer_watchers;
+    struct c_hash_table *child_watchers;
 
     int last_timer_id;
     struct c_heap *free_timer_ids;
@@ -425,5 +433,8 @@ int io_mp_server_on_event(struct io_mp_server *, struct io_mp_connection *,
  * ------------------------------------------------------------------------ */
 uint32_t io_hash_uint64_ptr(const void *);
 bool io_equal_uint64_ptr(const void *, const void *);
+
+uint32_t io_hash_pid_ptr(const void *);
+bool io_equal_pid_ptr(const void *, const void *);
 
 #endif
