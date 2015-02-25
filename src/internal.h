@@ -115,6 +115,7 @@ void io_watcher_array_free(struct io_watcher_array *);
 
 void io_watcher_array_add(struct io_watcher_array *, int, struct io_watcher *);
 void io_watcher_array_remove(struct io_watcher_array *, int);
+bool io_watcher_array_contains(const struct io_watcher_array *, int);
 struct io_watcher *io_watcher_array_get(const struct io_watcher_array *, int);
 
 /* Base */

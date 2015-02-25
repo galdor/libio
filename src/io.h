@@ -100,9 +100,11 @@ int io_base_fd(const struct io_base *);
 
 int io_base_watch_fd(struct io_base *, int, uint32_t, io_fd_callback, void *);
 int io_base_unwatch_fd(struct io_base *, int);
+bool io_base_is_fd_watched(const struct io_base *, int);
 
 int io_base_watch_signal(struct io_base *, int, io_signal_callback, void *);
 int io_base_unwatch_signal(struct io_base *, int);
+bool io_base_is_signal_watched(const struct io_base *, int);
 
 int io_base_add_timer(struct io_base *, uint64_t, uint32_t,
                       io_timer_callback, void *);
@@ -110,6 +112,7 @@ int io_base_remove_timer(struct io_base *, int);
 
 int io_base_watch_child(struct io_base *, pid_t, io_child_callback, void *);
 int io_base_unwatch_child(struct io_base *, pid_t);
+bool io_base_is_child_watched(const struct io_base *, pid_t);
 void io_base_sigchld_handler(int, void *);
 
 bool io_base_has_watchers(const struct io_base *);

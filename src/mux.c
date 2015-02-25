@@ -205,6 +205,13 @@ io_watcher_array_remove(struct io_watcher_array *array, int id) {
     }
 }
 
+bool
+io_watcher_array_contains(const struct io_watcher_array *array, int id) {
+    assert(id >= 0);
+
+    return ((size_t)id < array->size) && (array->watchers[id] != NULL);
+}
+
 struct io_watcher *
 io_watcher_array_get(const struct io_watcher_array *array, int id) {
     assert(id >= 0);
@@ -354,6 +361,11 @@ io_base_unwatch_fd(struct io_base *base, int fd) {
     return 0;
 }
 
+bool
+io_base_is_fd_watched(const struct io_base *base, int fd) {
+    return io_watcher_array_contains(&base->fd_watchers, fd);
+}
+
 int
 io_base_watch_signal(struct io_base *base, int signo,
                      io_signal_callback cb, void *arg) {
@@ -409,6 +421,11 @@ io_base_unwatch_signal(struct io_base *base, int signo) {
         io_watcher_delete(watcher);
     }
     return 0;
+}
+
+bool
+io_base_is_signal_watched(const struct io_base *base, int signo) {
+    return io_watcher_array_contains(&base->signal_watchers, signo);
 }
 
 int
@@ -523,6 +540,11 @@ io_base_unwatch_child(struct io_base *base, pid_t pid) {
     }
 
     return 0;
+}
+
+bool
+io_base_is_child_watched(const struct io_base *base, pid_t pid) {
+    return c_hash_table_contains(base->child_watchers, &pid);
 }
 
 void
