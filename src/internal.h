@@ -101,7 +101,7 @@ void io_watcher_delete(struct io_watcher *);
 
 void io_watcher_free_backend(struct io_watcher *);
 
-int io_watcher_on_events(struct io_watcher *, uint32_t);
+void io_watcher_on_events(struct io_watcher *, uint32_t);
 
 /* Watcher arrays */
 struct io_watcher_array {

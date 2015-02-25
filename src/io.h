@@ -110,6 +110,7 @@ int io_base_remove_timer(struct io_base *, int);
 
 int io_base_watch_child(struct io_base *, pid_t, io_child_callback, void *);
 int io_base_unwatch_child(struct io_base *, pid_t);
+void io_base_sigchld_handler(int, void *);
 
 bool io_base_has_watchers(const struct io_base *);
 int io_base_read_events(struct io_base *);

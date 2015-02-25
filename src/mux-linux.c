@@ -330,10 +330,7 @@ io_base_read_events_backend(struct io_base *base) {
     if (events == 0)
         return 0;
 
-    if (io_watcher_on_events(watcher, events) == -1) {
-        c_set_error("event processing error: %s", c_get_error());
-        return -1;
-    }
+    io_watcher_on_events(watcher, events);
 
     return 0;
 }
