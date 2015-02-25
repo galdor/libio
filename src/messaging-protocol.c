@@ -878,9 +878,11 @@ io_mp_connection_on_event_read(struct io_mp_connection *connection) {
             return 0;
         }
 
+#if 0
         io_mp_connection_trace(connection,
                                "msg: op 0x%02x, type %u, id 0x%08x payload sz %zu",
                                msg.op, msg.type, msg.id, msg.payload_sz);
+#endif
 
         if (io_mp_connection_process_msg(connection, &msg) == -1) {
             io_mp_msg_free(&msg);
@@ -1010,6 +1012,7 @@ io_mp_connection_process_notification_request(struct io_mp_connection *connectio
         } else {
             type_string = "request";
         }
+
         c_set_error("error while processing %s 0x%02x: %s",
                     type_string, msg->op, c_get_error());
         return -1;
