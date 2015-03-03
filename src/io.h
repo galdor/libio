@@ -152,6 +152,7 @@ enum io_mp_msg_type io_mp_msg_type(const struct io_mp_msg *);
 uint32_t io_mp_msg_id(const struct io_mp_msg *);
 const void *io_mp_msg_payload(const struct io_mp_msg *, size_t *);
 void *io_mp_msg_payload_data(const struct io_mp_msg *);
+size_t io_mp_msg_payload_size(const struct io_mp_msg *);
 
 void io_mp_msg_set_payload_data(struct io_mp_msg *, void *,
                                 io_mp_msg_payload_data_free_func);
