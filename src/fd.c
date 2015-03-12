@@ -20,23 +20,29 @@
 
 #include "internal.h"
 
-static int io_fd_add_remove_flags(int, int, int);
+static int io_fd_add_remove_flags(int, int, int, int, int);
 
 int
 io_fd_set_blocking(int fd) {
-    return io_fd_add_remove_flags(fd, 0, O_NONBLOCK);
+    return io_fd_add_remove_flags(fd, F_GETFL, F_SETFL, 0, O_NONBLOCK);
 }
 
 int
 io_fd_set_non_blocking(int fd) {
-    return io_fd_add_remove_flags(fd, O_NONBLOCK, 0);
+    return io_fd_add_remove_flags(fd, F_GETFL, F_SETFL, O_NONBLOCK, 0);
+}
+
+int
+io_fd_set_cloexec(int fd) {
+    return io_fd_add_remove_flags(fd, F_GETFD, F_SETFD, FD_CLOEXEC, 0);
 }
 
 static int
-io_fd_add_remove_flags(int fd, int added_flags, int removed_flags) {
+io_fd_add_remove_flags(int fd, int getval, int setval,
+                       int added_flags, int removed_flags) {
     int current_flags;
 
-    current_flags = fcntl(fd, F_GETFL, 0);
+    current_flags = fcntl(fd, getval, 0);
     if (current_flags == -1) {
         c_set_error("cannot get file descriptor flags: %s", strerror(errno));
         return -1;
@@ -45,7 +51,7 @@ io_fd_add_remove_flags(int fd, int added_flags, int removed_flags) {
     current_flags |= added_flags;
     current_flags &= ~removed_flags;
 
-    if (fcntl(fd, F_SETFL, current_flags) == -1) {
+    if (fcntl(fd, setval, current_flags) == -1) {
         c_set_error("cannot set file descriptor flags: %s", strerror(errno));
         return -1;
     }

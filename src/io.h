@@ -59,6 +59,8 @@ void io_address_set_port(struct io_address *, uint16_t);
 int io_fd_set_blocking(int);
 int io_fd_set_non_blocking(int);
 
+int io_fd_set_cloexec(int);
+
 /* ------------------------------------------------------------------------
  *  Time
  * ------------------------------------------------------------------------ */
