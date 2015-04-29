@@ -58,20 +58,20 @@ io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
         array = &watcher->base->fd_watchers;
         id = watcher->u.fd.fd;
 
-        watcher->in_callback = true;
+        watcher->in_cb = true;
         if (watcher->u.fd.cb)
             watcher->u.fd.cb(watcher->u.fd.fd, events, watcher->cb_arg);
-        watcher->in_callback = false;
+        watcher->in_cb = false;
         break;
 
     case IO_WATCHER_SIGNAL:
         array = &watcher->base->signal_watchers;
         id = watcher->u.signal.signo;
 
-        watcher->in_callback = true;
+        watcher->in_cb = true;
         if (watcher->u.signal.cb)
             watcher->u.signal.cb(watcher->u.signal.signo, watcher->cb_arg);
-        watcher->in_callback = false;
+        watcher->in_cb = false;
         break;
 
     case IO_WATCHER_TIMER:
@@ -91,9 +91,9 @@ io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
 
             watcher->u.timer.expired = true;
 
-            watcher->in_callback = true;
+            watcher->in_cb = true;
             watcher->u.timer.cb(id, duration, watcher->cb_arg);
-            watcher->in_callback = false;
+            watcher->in_cb = false;
         }
 
         if (watcher->enabled && is_recurrent) {
@@ -104,12 +104,12 @@ io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
         break;
 
     case IO_WATCHER_CHILD:
-        watcher->in_callback = true;
+        watcher->in_cb = true;
         if (watcher->u.child.cb) {
             watcher->u.child.cb(watcher->u.child.pid, events,
                                 watcher->u.child.event_value, watcher->cb_arg);
         }
-        watcher->in_callback = false;
+        watcher->in_cb = false;
         break;
     }
 
@@ -281,11 +281,11 @@ io_base_fd(const struct io_base *base) {
 
 int
 io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
-                 io_fd_callback cb, void *arg) {
+                 io_fd_cb cb, void *arg) {
     struct io_watcher *watcher;
     bool is_new;
     uint32_t old_events;
-    io_fd_callback old_cb;
+    io_fd_cb old_cb;
     void *old_cb_arg;
 
     assert(fd >= 0);
@@ -355,7 +355,7 @@ io_base_unwatch_fd(struct io_base *base, int fd) {
         return -1;
 
     watcher->enabled = false;
-    if (!watcher->in_callback) {
+    if (!watcher->in_cb) {
         io_watcher_array_remove(&base->fd_watchers, fd);
         io_watcher_delete(watcher);
     }
@@ -369,7 +369,7 @@ io_base_is_fd_watched(const struct io_base *base, int fd) {
 
 int
 io_base_watch_signal(struct io_base *base, int signo,
-                     io_signal_callback cb, void *arg) {
+                     io_signal_cb cb, void *arg) {
     struct io_watcher *watcher;
 
     assert(signo >= 0);
@@ -417,7 +417,7 @@ io_base_unwatch_signal(struct io_base *base, int signo) {
         return -1;
 
     watcher->enabled = false;
-    if (!watcher->in_callback) {
+    if (!watcher->in_cb) {
         io_watcher_array_remove(&base->signal_watchers, signo);
         io_watcher_delete(watcher);
     }
@@ -471,7 +471,7 @@ io_base_unblock_sigchld(struct io_base *base) {
 
 int
 io_base_add_timer(struct io_base *base, uint64_t duration, uint32_t flags,
-                  io_timer_callback cb, void *arg) {
+                  io_timer_cb cb, void *arg) {
     struct io_watcher *watcher;
     uint64_t now;
     int id;
@@ -524,7 +524,7 @@ io_base_remove_timer(struct io_base *base, int id) {
         return -1;
 
     watcher->enabled = false;
-    if (!watcher->in_callback) {
+    if (!watcher->in_cb) {
         io_watcher_array_remove(&base->timer_watchers, id);
         io_base_release_timer_id(base, id);
 
@@ -535,7 +535,7 @@ io_base_remove_timer(struct io_base *base, int id) {
 
 int
 io_base_watch_child(struct io_base *base, pid_t pid,
-                    io_child_callback cb, void *cb_arg) {
+                    io_child_cb cb, void *cb_arg) {
     struct io_watcher *watcher;
 
     assert(pid != (pid_t)-1);
@@ -575,7 +575,7 @@ io_base_unwatch_child(struct io_base *base, pid_t pid) {
     }
 
     watcher->enabled = false;
-    if (!watcher->in_callback) {
+    if (!watcher->in_cb) {
         c_hash_table_remove(base->child_watchers, &pid);
         io_watcher_delete(watcher);
     }

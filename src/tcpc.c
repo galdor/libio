@@ -28,7 +28,7 @@ static void io_tcpc_on_event_connecting(int, uint32_t, void *);
 static void io_tcpc_on_event(int, uint32_t, void *);
 
 struct io_tcpc *
-io_tcpc_new(struct io_base *base, io_tcpc_event_callback cb, void *cb_arg) {
+io_tcpc_new(struct io_base *base, io_tcpc_event_cb cb, void *cb_arg) {
     struct io_tcpc *client;
 
     client = c_malloc0(sizeof(struct io_tcpc));
@@ -40,8 +40,8 @@ io_tcpc_new(struct io_base *base, io_tcpc_event_callback cb, void *cb_arg) {
     client->rbuf = c_buffer_new();
     client->wbuf = c_buffer_new();
 
-    client->event_callback = cb;
-    client->event_callback_arg = cb_arg;
+    client->event_cb = cb;
+    client->event_cb_arg = cb_arg;
 
     client->base = base;
 
@@ -196,10 +196,10 @@ io_tcpc_watch(struct io_tcpc *client, uint32_t events) {
 
 static void
 io_tcpc_signal_event(struct io_tcpc *client, enum io_tcpc_event event) {
-    if (!client->event_callback)
+    if (!client->event_cb)
         return;
 
-    client->event_callback(client, event, client->event_callback_arg);
+    client->event_cb(client, event, client->event_cb_arg);
 }
 
 static void

@@ -90,21 +90,21 @@ enum io_event {
     IO_EVENT_CHILD_ABORTED   = (1 << 7),
 };
 
-typedef void (*io_signal_callback)(int, void *);
-typedef void (*io_fd_callback)(int, uint32_t, void *);
-typedef void (*io_timer_callback)(int, uint64_t, void *);
-typedef void (*io_child_callback)(pid_t, uint32_t, int, void *);
+typedef void (*io_signal_cb)(int, void *);
+typedef void (*io_fd_cb)(int, uint32_t, void *);
+typedef void (*io_timer_cb)(int, uint64_t, void *);
+typedef void (*io_child_cb)(pid_t, uint32_t, int, void *);
 
 struct io_base *io_base_new(void);
 void io_base_delete(struct io_base *);
 
 int io_base_fd(const struct io_base *);
 
-int io_base_watch_fd(struct io_base *, int, uint32_t, io_fd_callback, void *);
+int io_base_watch_fd(struct io_base *, int, uint32_t, io_fd_cb, void *);
 int io_base_unwatch_fd(struct io_base *, int);
 bool io_base_is_fd_watched(const struct io_base *, int);
 
-int io_base_watch_signal(struct io_base *, int, io_signal_callback, void *);
+int io_base_watch_signal(struct io_base *, int, io_signal_cb, void *);
 int io_base_unwatch_signal(struct io_base *, int);
 bool io_base_is_signal_watched(const struct io_base *, int);
 int io_base_watch_sigchld(struct io_base *);
@@ -113,10 +113,10 @@ int io_base_block_sigchld(struct io_base *);
 int io_base_unblock_sigchld(struct io_base *);
 
 int io_base_add_timer(struct io_base *, uint64_t, uint32_t,
-                      io_timer_callback, void *);
+                      io_timer_cb, void *);
 int io_base_remove_timer(struct io_base *, int);
 
-int io_base_watch_child(struct io_base *, pid_t, io_child_callback, void *);
+int io_base_watch_child(struct io_base *, pid_t, io_child_cb, void *);
 int io_base_unwatch_child(struct io_base *, pid_t);
 bool io_base_is_child_watched(const struct io_base *, pid_t);
 void io_base_sigchld_handler(int, void *);
@@ -137,10 +137,9 @@ enum io_tcpc_event {
 
 struct io_tcpc;
 
-typedef void (*io_tcpc_event_callback)(struct io_tcpc *, enum io_tcpc_event,
-                                       void *);
+typedef void (*io_tcpc_event_cb)(struct io_tcpc *, enum io_tcpc_event, void *);
 
-struct io_tcpc *io_tcpc_new(struct io_base *, io_tcpc_event_callback, void *);
+struct io_tcpc *io_tcpc_new(struct io_base *, io_tcpc_event_cb, void *);
 void io_tcpc_delete(struct io_tcpc *);
 
 struct c_buffer *io_tcpc_rbuf(const struct io_tcpc *);

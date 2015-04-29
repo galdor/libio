@@ -53,19 +53,19 @@ struct io_watcher {
 
     bool registered;
     bool enabled;
-    bool in_callback;
+    bool in_cb;
 
     void *cb_arg;
 
     union {
         struct {
             int fd;
-            io_fd_callback cb;
+            io_fd_cb cb;
         } fd;
 
         struct {
             int signo;
-            io_signal_callback cb;
+            io_signal_cb cb;
 
 #ifdef IO_PLATFORM_LINUX
             int fd;
@@ -74,7 +74,7 @@ struct io_watcher {
 
         struct {
             int id;
-            io_timer_callback cb;
+            io_timer_cb cb;
 
             uint64_t duration; /* milliseconds */
             uint32_t flags; /* enum io_timer_flag */
@@ -90,7 +90,7 @@ struct io_watcher {
 
         struct {
             pid_t pid;
-            io_child_callback cb;
+            io_child_cb cb;
             int event_value;
         } child;
     } u;
@@ -170,8 +170,8 @@ struct io_tcpc {
     struct c_buffer *rbuf;
     struct c_buffer *wbuf;
 
-    io_tcpc_event_callback event_callback;
-    void *event_callback_arg;
+    io_tcpc_event_cb event_cb;
+    void *event_cb_arg;
 
     struct io_base *base;
 };
