@@ -10,6 +10,7 @@ session.vim
 /examples/mp-server
 /examples/signals
 /examples/stdin
+/examples/tcpc
 /examples/timers
 
 /tests/address

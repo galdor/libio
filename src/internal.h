@@ -149,6 +149,34 @@ int io_base_disable_timer_backend(struct io_base *, struct io_watcher *);
 int io_base_read_events_backend(struct io_base *);
 
 /* ------------------------------------------------------------------------
+ *  TCP client
+ * ------------------------------------------------------------------------ */
+enum io_tcpc_state {
+    IO_TCPC_STATE_DISCONNECTED,
+    IO_TCPC_STATE_CONNECTING,
+    IO_TCPC_STATE_CONNECTED,
+    IO_TCPC_STATE_DISCONNECTING,
+};
+
+struct io_tcpc {
+    enum io_tcpc_state state;
+
+    char *host;
+    uint16_t port;
+    struct io_address addr;
+
+    int sock;
+
+    struct c_buffer *rbuf;
+    struct c_buffer *wbuf;
+
+    io_tcpc_event_callback event_callback;
+    void *event_callback_arg;
+
+    struct io_base *base;
+};
+
+/* ------------------------------------------------------------------------
  *  Utils
  * ------------------------------------------------------------------------ */
 uint32_t io_hash_pid_ptr(const void *);

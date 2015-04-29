@@ -124,4 +124,31 @@ void io_base_sigchld_handler(int, void *);
 bool io_base_has_watchers(const struct io_base *);
 int io_base_read_events(struct io_base *);
 
+/* ------------------------------------------------------------------------
+ *  TCP client
+ * ------------------------------------------------------------------------ */
+enum io_tcpc_event {
+    IO_TCPC_EVENT_CONNECTION_ESTABLISHED,
+    IO_TCPC_EVENT_CONNECTION_CLOSED,
+    IO_TCPC_EVENT_CONNECTION_LOST,
+    IO_TCPC_EVENT_ERROR,
+    IO_TCPC_EVENT_DATA_READ,
+};
+
+struct io_tcpc;
+
+typedef void (*io_tcpc_event_callback)(struct io_tcpc *, enum io_tcpc_event,
+                                       void *);
+
+struct io_tcpc *io_tcpc_new(struct io_base *, io_tcpc_event_callback, void *);
+void io_tcpc_delete(struct io_tcpc *);
+
+struct c_buffer *io_tcpc_rbuf(const struct io_tcpc *);
+
+int io_tcpc_connect(struct io_tcpc *, const char *, uint16_t);
+void io_tcpc_disconnect(struct io_tcpc *);
+void io_tcpc_close(struct io_tcpc *);
+
+void io_tcpc_write(struct io_tcpc *, const void *, size_t);
+
 #endif
