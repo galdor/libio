@@ -123,6 +123,11 @@ ioex_on_client_event(struct io_tcpc *client, enum io_tcpc_event event,
         io_tcpc_write(client, string, strlen(string));
         break;
 
+    case IO_TCPC_EVENT_CONNECTION_FAILED:
+        printf("connection failed\n");
+        ioex.do_exit = true;
+        break;
+
     case IO_TCPC_EVENT_CONNECTION_CLOSED:
         printf("connection closed\n");
         ioex.do_exit = true;

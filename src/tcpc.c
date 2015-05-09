@@ -234,7 +234,7 @@ io_tcpc_on_event_connecting(int sock, uint32_t events, void *arg) {
                              strerror(errno));
 
         io_tcpc_close(client);
-        io_tcpc_signal_event(client, IO_TCPC_EVENT_CONNECTION_CLOSED);
+        io_tcpc_signal_event(client, IO_TCPC_EVENT_CONNECTION_FAILED);
         return;
     }
 
@@ -244,7 +244,7 @@ io_tcpc_on_event_connecting(int sock, uint32_t events, void *arg) {
                              strerror(error));
 
         io_tcpc_close(client);
-        io_tcpc_signal_event(client, IO_TCPC_EVENT_CONNECTION_CLOSED);
+        io_tcpc_signal_event(client, IO_TCPC_EVENT_CONNECTION_FAILED);
         return;
     }
 

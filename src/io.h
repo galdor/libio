@@ -128,6 +128,7 @@ int io_base_read_events(struct io_base *);
  *  TCP client
  * ------------------------------------------------------------------------ */
 enum io_tcpc_event {
+    IO_TCPC_EVENT_CONNECTION_FAILED,
     IO_TCPC_EVENT_CONNECTION_ESTABLISHED,
     IO_TCPC_EVENT_CONNECTION_CLOSED,
     IO_TCPC_EVENT_CONNECTION_LOST,
