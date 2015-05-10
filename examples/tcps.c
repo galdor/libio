@@ -24,7 +24,7 @@
 
 struct ioex {
     struct io_base *base;
-    struct io_tcpc *client;
+    struct io_tcps *server;
     bool do_exit;
 };
 
@@ -32,7 +32,8 @@ static void ioex_die(const char *, ...)
     __attribute__ ((format(printf, 1, 2), noreturn));
 
 static void ioex_on_signal(int, void *);
-static void ioex_on_client_event(struct io_tcpc *, enum io_tcpc_event, void *);
+static void ioex_on_server_event(struct io_tcps *, struct io_tcpsc *,
+                                 enum io_tcps_event, void *);
 
 static struct ioex ioex;
 
@@ -44,8 +45,8 @@ main(int argc, char **argv) {
 
     cmdline = c_command_line_new();
 
-    c_command_line_add_argument(cmdline, "the host to connect to", "host");
-    c_command_line_add_argument(cmdline, "the port to connect to", "port");
+    c_command_line_add_argument(cmdline, "the host to bind to", "host");
+    c_command_line_add_argument(cmdline, "the port to listen on", "port");
 
     if (c_command_line_parse(cmdline, argc, argv) == -1)
         ioex_die("%s", c_get_error());
@@ -63,16 +64,16 @@ main(int argc, char **argv) {
     if (io_base_watch_signal(ioex.base, SIGTERM, ioex_on_signal, NULL) == -1)
         ioex_die("cannot watch signal: %s", c_get_error());
 
-    ioex.client = io_tcpc_new(ioex.base, ioex_on_client_event, NULL);
-    if (io_tcpc_connect(ioex.client, host, port) == -1)
-        ioex_die("cannot connect client: %s", c_get_error());
+    ioex.server = io_tcps_new(ioex.base, ioex_on_server_event, NULL);
+    if (io_tcps_listen(ioex.server, host, port) == -1)
+        ioex_die("cannot listen: %s", c_get_error());
 
     while (!ioex.do_exit) {
         if (io_base_read_events(ioex.base) == -1)
             ioex_die("cannot read events: %s", c_get_error());
     }
 
-    io_tcpc_delete(ioex.client);
+    io_tcps_delete(ioex.server);
     io_base_delete(ioex.base);
 
     c_command_line_delete(cmdline);
@@ -100,56 +101,59 @@ ioex_on_signal(int signo, void *arg) {
     switch (signo) {
     case SIGINT:
     case SIGTERM:
-        io_tcpc_disconnect(ioex.client);
+        io_tcps_stop(ioex.server);
         break;
     }
 }
 
 static void
-ioex_on_client_event(struct io_tcpc *client, enum io_tcpc_event event,
-                     void *arg) {
+ioex_on_server_event(struct io_tcps *server, struct io_tcpsc *connection,
+                     enum io_tcps_event event, void *arg) {
     struct c_buffer *rbuf;
     const char *string;
 
-    rbuf = io_tcpc_rbuf(client);
+    if (connection)
+        rbuf = io_tcpsc_rbuf(connection);
 
     switch (event) {
-    case IO_TCPC_EVENT_CONNECTION_ESTABLISHED:
-        printf("connection established\n");
+    case IO_TCPS_EVENT_SERVER_LISTENING:
+        printf("server listening\n");
+        break;
+
+    case IO_TCPS_EVENT_SERVER_STOPPED:
+        printf("server stopped\n");
+        ioex.do_exit = true;
+        break;
+
+    case IO_TCPS_EVENT_CONNECTION_ACCEPTED:
+        printf("connection accepted\n");
 
         string = "hello world\n";
-        if (io_tcpc_write(client, string, strlen(string)) == -1)
+        if (io_tcpsc_write(connection, string, strlen(string)) == -1)
             ioex_die("cannot write to connection: %s", c_get_error());
         break;
 
-    case IO_TCPC_EVENT_CONNECTION_FAILED:
-        printf("connection failed\n");
-        ioex.do_exit = true;
-        break;
-
-    case IO_TCPC_EVENT_CONNECTION_CLOSED:
+    case IO_TCPS_EVENT_CONNECTION_CLOSED:
         printf("connection closed\n");
-        ioex.do_exit = true;
         break;
 
-    case IO_TCPC_EVENT_CONNECTION_LOST:
+    case IO_TCPS_EVENT_CONNECTION_LOST:
         printf("connection lost\n");
-        ioex.do_exit = true;
         break;
 
-    case IO_TCPC_EVENT_ERROR:
+    case IO_TCPS_EVENT_ERROR:
         printf("error: %s\n", c_get_error());
         break;
 
-    case IO_TCPC_EVENT_DATA_READ:
+    case IO_TCPS_EVENT_DATA_READ:
         printf("%zu bytes read\n", c_buffer_length(rbuf));
         c_buffer_clear(rbuf);
 
         string = "bye\n";
-        if (io_tcpc_write(client, string, strlen(string)) == -1)
+        if (io_tcpsc_write(connection, string, strlen(string)) == -1)
             ioex_die("cannot write to connection: %s", c_get_error());
 
-        io_tcpc_disconnect(client);
+        io_tcpsc_disconnect(connection);
         break;
     }
 }

@@ -15,8 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <unistd.h>
-
 #include "internal.h"
 
 static int io_tcpc_watch(struct io_tcpc *, uint32_t);
@@ -165,22 +163,16 @@ io_tcpc_close(struct io_tcpc *client) {
     client->state = IO_TCPC_STATE_DISCONNECTED;
 }
 
-void
+int
 io_tcpc_write(struct io_tcpc *client, const void *data, size_t sz) {
     assert(client->state == IO_TCPC_STATE_CONNECTED);
 
     if (sz == 0)
-        return;
+        return 0;
 
     c_buffer_add(client->wbuf, data, sz);
 
-    if (io_tcpc_watch(client, IO_EVENT_FD_READ | IO_EVENT_FD_WRITE) == -1) {
-        io_tcpc_signal_error(client, "%s", c_get_error());
-
-        io_tcpc_close(client);
-        io_tcpc_signal_event(client, IO_TCPC_EVENT_CONNECTION_CLOSED);
-        return;
-    }
+    return io_tcpc_watch(client, IO_EVENT_FD_READ | IO_EVENT_FD_WRITE);
 }
 
 static int
@@ -302,7 +294,6 @@ io_tcpc_on_event(int sock, uint32_t events, void *arg) {
     }
 
     if (events & IO_EVENT_FD_WRITE) {
-        printf("write event\n");
         if (c_buffer_write(client->wbuf, client->sock) == -1) {
             io_tcpc_signal_error(client, "cannot write socket: %s",
                                  strerror(errno));

@@ -11,6 +11,7 @@ session.vim
 /examples/signals
 /examples/stdin
 /examples/tcpc
+/examples/tcps
 /examples/timers
 
 /tests/address

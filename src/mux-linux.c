@@ -20,7 +20,6 @@
 #include <sys/epoll.h>
 #include <sys/signalfd.h>
 #include <sys/timerfd.h>
-#include <unistd.h>
 
 #include "internal.h"
 

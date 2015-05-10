@@ -149,6 +149,37 @@ int io_tcpc_connect(struct io_tcpc *, const char *, uint16_t);
 void io_tcpc_disconnect(struct io_tcpc *);
 void io_tcpc_close(struct io_tcpc *);
 
-void io_tcpc_write(struct io_tcpc *, const void *, size_t);
+int io_tcpc_write(struct io_tcpc *, const void *, size_t);
+
+/* ------------------------------------------------------------------------
+ *  TCP server
+ * ------------------------------------------------------------------------ */
+enum io_tcps_event {
+    IO_TCPS_EVENT_SERVER_LISTENING,
+    IO_TCPS_EVENT_SERVER_STOPPED,
+    IO_TCPS_EVENT_CONNECTION_ACCEPTED,
+    IO_TCPS_EVENT_CONNECTION_CLOSED,
+    IO_TCPS_EVENT_CONNECTION_LOST,
+    IO_TCPS_EVENT_ERROR,
+    IO_TCPS_EVENT_DATA_READ,
+};
+
+struct io_tcps;
+struct io_tcpsc;
+
+typedef void (*io_tcps_event_cb)(struct io_tcps *, struct io_tcpsc *,
+                                 enum io_tcps_event, void *);
+
+struct io_tcps *io_tcps_new(struct io_base *, io_tcps_event_cb, void *);
+void io_tcps_delete(struct io_tcps *);
+
+int io_tcps_listen(struct io_tcps *, const char *, uint16_t);
+void io_tcps_stop(struct io_tcps *);
+void io_tcps_close(struct io_tcps *);
+
+void io_tcpsc_disconnect(struct io_tcpsc *);
+void io_tcpsc_close(struct io_tcpsc *);
+struct c_buffer *io_tcpsc_rbuf(const struct io_tcpsc *);
+int io_tcpsc_write(struct io_tcpsc *, const void *, size_t);
 
 #endif

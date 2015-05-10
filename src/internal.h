@@ -27,6 +27,7 @@
 
 #include <net/if.h>
 #include <netdb.h>
+#include <unistd.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -175,6 +176,60 @@ struct io_tcpc {
 
     struct io_base *base;
 };
+
+/* ------------------------------------------------------------------------
+ *  TCP server
+ * ------------------------------------------------------------------------ */
+enum io_tcpsc_state {
+    IO_TCPSC_STATE_DISCONNECTED,
+    IO_TCPSC_STATE_CONNECTED,
+    IO_TCPSC_STATE_DISCONNECTING,
+};
+
+struct io_tcpsc {
+    enum io_tcpsc_state state;
+
+    struct io_address addr;
+    int sock;
+
+    struct c_buffer *rbuf;
+    struct c_buffer *wbuf;
+
+    struct io_tcps *server;
+    struct c_queue_entry *queue_entry;
+};
+
+struct io_tcpsc *io_tcpsc_new(struct io_tcps *, int);
+void io_tcpsc_delete(struct io_tcpsc *);
+
+void io_tcpsc_discard(struct io_tcpsc *);
+void io_tcpsc_close_discard(struct io_tcpsc *);
+
+enum io_tcps_state {
+    IO_TCPS_STATE_STOPPED,
+    IO_TCPS_STATE_LISTENING,
+    IO_TCPS_STATE_STOPPING,
+};
+
+struct io_tcps {
+    enum io_tcps_state state;
+
+    char *host;
+    uint16_t port;
+    struct io_address addr;
+
+    int sock;
+
+    struct c_queue *connections;
+
+    io_tcps_event_cb event_cb;
+    void *event_cb_arg;
+
+    struct io_base *base;
+};
+
+void io_tcps_add_connection(struct io_tcps *, struct io_tcpsc *);
+void io_tcps_remove_connection(struct io_tcps *, struct io_tcpsc *);
 
 /* ------------------------------------------------------------------------
  *  Utils

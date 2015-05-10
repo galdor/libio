@@ -16,7 +16,6 @@
  */
 
 #include <fcntl.h>
-#include <unistd.h>
 
 #include "internal.h"
 

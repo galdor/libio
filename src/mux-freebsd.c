@@ -17,8 +17,6 @@
 
 #ifdef IO_PLATFORM_FREEBSD
 
-#include <unistd.h>
-
 #include <sys/event.h>
 #include <sys/time.h>
 #include <sys/types.h>

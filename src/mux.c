@@ -17,7 +17,6 @@
 
 #include <limits.h>
 
-#include <unistd.h>
 #include <sys/wait.h>
 
 #include "internal.h"
