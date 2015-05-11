@@ -237,8 +237,6 @@ io_tcps_new(struct io_base *base, io_tcps_event_cb cb, void *cb_arg) {
 
     server->state = IO_TCPS_STATE_STOPPED;
 
-    server->sock = -1;
-
     server->connections = c_queue_new();
 
     server->event_cb = cb;
@@ -256,6 +254,8 @@ io_tcps_delete(struct io_tcps *server) {
 
     c_free(server->host);
 
+    c_free(server->socks);
+
     c_queue_delete(server->connections);
 
     c_free0(server, sizeof(struct io_tcps));
@@ -263,62 +263,80 @@ io_tcps_delete(struct io_tcps *server) {
 
 int
 io_tcps_listen(struct io_tcps *server, const char *host, uint16_t port) {
-    struct io_address addr;
-    int sock, opt;
+    struct io_address *addrs;
+    size_t nb_addrs;
+    int *socks;
 
     assert(server->state == IO_TCPS_STATE_STOPPED);
 
-    /* XXX multiple addresses */
-
-    if (io_address_init(&addr, host, port) == -1) {
-        c_set_error("cannot initialize address: %s", c_get_error());
+    if (io_address_resolve(host, port, AF_UNSPEC, SOCK_STREAM, IPPROTO_TCP,
+                           &addrs, &nb_addrs) == -1) {
+        c_set_error("cannot resolve address: %s", c_get_error());
         return -1;
     }
 
-    sock = socket(io_address_family(&addr), SOCK_STREAM, IPPROTO_TCP);
-    if (sock == -1) {
-        c_set_error("cannot create socket: %s", strerror(errno));
-        return -1;
-    }
+    socks = c_calloc(nb_addrs, sizeof(int));
 
-    opt = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int)) == -1) {
-        c_set_error("cannot set SO_REUSEADDR: %s", strerror(errno));
-        close(sock);
-        return -1;
-    }
+    for (size_t i = 0; i < nb_addrs; i++) {
+        struct io_address *addr;
+        int sock, opt;
 
-    if (bind(sock, io_address_sockaddr(&addr),
-             io_address_length(&addr)) == -1) {
-        c_set_error("cannot bind socket: %s", c_get_error());
-        close(sock);
-        return -1;
-    }
+        addr = addrs + i;
 
-    if (listen(sock, 10) == -1) {
-        c_set_error("cannot listen on socket: %s", c_get_error());
-        close(sock);
-        return -1;
-    }
+        sock = socket(io_address_family(addr), SOCK_STREAM, IPPROTO_TCP);
+        if (sock == -1) {
+            c_set_error("cannot create socket: %s", strerror(errno));
+            goto error;
+        }
 
-    if (io_base_watch_fd(server->base, sock, IO_EVENT_FD_READ,
-                         io_tcps_on_event, server) == -1) {
-        c_set_error("cannot watch socket: %s", c_get_error());
-        close(sock);
-        return -1;
+        opt = 1;
+        if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int)) == -1) {
+            c_set_error("cannot set SO_REUSEADDR: %s", strerror(errno));
+            close(sock);
+            goto error;
+        }
+
+        if (bind(sock, io_address_sockaddr(addr),
+                 io_address_length(addr)) == -1) {
+            c_set_error("cannot bind socket: %s", c_get_error());
+            close(sock);
+            goto error;
+        }
+
+        if (listen(sock, 10) == -1) {
+            c_set_error("cannot listen on socket: %s", c_get_error());
+            close(sock);
+            goto error;
+        }
+
+        if (io_base_watch_fd(server->base, sock, IO_EVENT_FD_READ,
+                             io_tcps_on_event, server) == -1) {
+            c_set_error("cannot watch socket: %s", c_get_error());
+            close(sock);
+            goto error;
+        }
+
+        socks[i] = sock;
     }
 
     c_free(server->host);
     server->host = c_strdup(host);
     server->port = port;
-    server->addr = addr;
 
-    server->sock = sock;
+    server->nb_socks = nb_addrs;
+    server->socks = socks;
 
     server->state = IO_TCPS_STATE_LISTENING;
 
     io_tcps_signal_event(server, IO_TCPS_EVENT_SERVER_LISTENING);
+
+    c_free(addrs);
     return 0;
+
+error:
+    c_free(socks);
+    c_free(addrs);
+    return -1;
 }
 
 void
@@ -327,21 +345,21 @@ io_tcps_stop(struct io_tcps *server) {
 
     assert(server->state == IO_TCPS_STATE_LISTENING);
 
-    if (io_base_unwatch_fd(server->base, server->sock) == -1) {
-        io_tcps_signal_error(server, "cannot unwatch socket: %s",
-                             c_get_error());
+    for (size_t i = 0; i < server->nb_socks; i++) {
+        int sock;
+
+        sock = server->socks[i];
+
+        if (io_base_unwatch_fd(server->base, sock) == -1) {
+            io_tcps_signal_error(server, "cannot unwatch socket: %s",
+                                 c_get_error());
+        }
     }
 
     /* The proper way would be disconnect all connections and wait for the
      * last one to be closed, then close the server. Infortunately, it means
      * checking whether the connection list is empty or not each time a
      * connection is removed. I have to do it one day... */
-
-    if (c_queue_is_empty(server->connections)) {
-        io_tcps_close(server);
-        io_tcps_signal_event(server, IO_TCPS_EVENT_SERVER_STOPPED);
-        return;
-    }
 
     entry = c_queue_first_entry(server->connections);
     while (entry) {
@@ -369,6 +387,11 @@ io_tcps_close(struct io_tcps *server) {
     if (server->state == IO_TCPS_STATE_STOPPED)
         return;
 
+    for (size_t i = 0; i < server->nb_socks; i++) {
+        close(server->socks[i]);
+        server->socks[i] = -1;
+    }
+
     entry = c_queue_first_entry(server->connections);
     while (entry) {
         struct io_tcpsc *connection;
@@ -380,10 +403,8 @@ io_tcps_close(struct io_tcps *server) {
 
         entry = c_queue_entry_next(entry);
     }
-    c_queue_clear(server->connections);
 
-    close(server->sock);
-    server->sock = -1;
+    c_queue_clear(server->connections);
 
     server->state = IO_TCPS_STATE_STOPPED;
 }
@@ -441,7 +462,7 @@ io_tcps_on_event(int sock, uint32_t events, void *arg) {
     assert(events & IO_EVENT_FD_READ);
 
     ss_len = sizeof(struct sockaddr_storage);
-    csock = accept(server->sock, (struct sockaddr *)&ss, &ss_len);
+    csock = accept(sock, (struct sockaddr *)&ss, &ss_len);
     if (csock == -1) {
         io_tcps_signal_error(server, "cannot accept connection: %s",
                              c_get_error());

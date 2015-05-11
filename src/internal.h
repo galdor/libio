@@ -216,9 +216,9 @@ struct io_tcps {
 
     char *host;
     uint16_t port;
-    struct io_address addr;
 
-    int sock;
+    int *socks;
+    size_t nb_socks;
 
     struct c_queue *connections;
 
