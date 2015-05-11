@@ -43,6 +43,9 @@ int io_address_init_from_sockaddr(struct io_address *,
 int io_address_init_from_sockaddr_storage(struct io_address *,
                                           const struct sockaddr_storage *);
 
+int io_address_resolve(const char *, uint16_t, sa_family_t, int, int,
+                       struct io_address **, size_t *);
+
 int io_address_family(const struct io_address *);
 uint16_t io_address_port(const struct io_address *);
 const char *io_address_host_string(const struct io_address *);

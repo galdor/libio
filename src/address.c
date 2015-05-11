@@ -37,9 +37,7 @@ io_address_init(struct io_address *address, const char *host, uint16_t port) {
     snprintf(service, NI_MAXSERV, "%u", port);
 
     memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_flags = 0;
     hints.ai_family = AF_UNSPEC;
-    hints.ai_addrlen = 0;
     hints.ai_flags = AI_NUMERICSERV;
 
     ret = getaddrinfo(host, service, &hints, &res);
@@ -96,6 +94,72 @@ io_address_init_from_sockaddr_storage(struct io_address *address,
     return io_address_init_from_sockaddr(address,
                                          (const struct sockaddr *)ss,
                                          sizeof(struct sockaddr_storage));
+}
+
+int
+io_address_resolve(const char *host, uint16_t port, sa_family_t family,
+                   int type, int proto,
+                   struct io_address **paddrs, size_t *p_nb_addrs) {
+    char service[NI_MAXSERV];
+    struct addrinfo hints, *res, *ai;
+    struct io_address *addrs;
+    size_t nb_addrs, i;
+    int ret;
+
+    snprintf(service, NI_MAXSERV, "%u", port);
+
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = family;
+    hints.ai_socktype = type;
+    hints.ai_protocol = proto;
+
+    ret = getaddrinfo(host, service, &hints, &res);
+    if (ret != 0) {
+        c_set_error("cannot resolve %s:%u: %s", host, port, gai_strerror(ret));
+        return -1;
+    }
+
+    nb_addrs = 0;
+    ai = res;
+    while (ai) {
+        nb_addrs++;
+        ai = ai->ai_next;
+    }
+
+    addrs = c_calloc(nb_addrs, sizeof(struct io_address));
+
+    i = 0;
+    ai = res;
+    while (ai) {
+        struct io_address *addr;
+
+        addr = addrs + i;
+
+        if (io_address_init_from_sockaddr(addr,
+                                          ai->ai_addr, ai->ai_addrlen) == -1) {
+            goto error;
+        }
+
+        if (io_address_update_strings(addr) == -1) {
+            c_set_error("cannot format address strings: %s", c_get_error());
+            goto error;
+        }
+
+        i++;
+        ai = ai->ai_next;
+    }
+
+
+    freeaddrinfo(res);
+
+    *paddrs = addrs;
+    *p_nb_addrs = nb_addrs;
+    return 0;
+
+error:
+    freeaddrinfo(res);
+    c_free(addrs);
+    return -1;
 }
 
 int
