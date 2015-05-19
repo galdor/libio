@@ -308,13 +308,13 @@ io_tcp_server_listen(struct io_tcp_server *server,
 
         if (bind(sock, io_address_sockaddr(addr),
                  io_address_length(addr)) == -1) {
-            c_set_error("cannot bind socket: %s", c_get_error());
+            c_set_error("cannot bind socket: %s", strerror(errno));
             close(sock);
             goto error;
         }
 
         if (listen(sock, 10) == -1) {
-            c_set_error("cannot listen on socket: %s", c_get_error());
+            c_set_error("cannot listen on socket: %s", strerror(errno));
             close(sock);
             goto error;
         }
