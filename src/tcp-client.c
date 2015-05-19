@@ -120,7 +120,14 @@ io_tcp_client_connect(struct io_tcp_client *client,
 
 void
 io_tcp_client_disconnect(struct io_tcp_client *client) {
-    assert(client->state == IO_TCP_CLIENT_STATE_CONNECTED);
+    assert(client->state == IO_TCP_CLIENT_STATE_CONNECTING
+        || client->state == IO_TCP_CLIENT_STATE_CONNECTED);
+
+    if (client->state == IO_TCP_CLIENT_STATE_CONNECTING) {
+        io_tcp_client_close(client);
+        io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+        return;
+    }
 
     if (c_buffer_length(client->wbuf) == 0) {
         io_tcp_client_close(client);
