@@ -130,59 +130,63 @@ int io_base_read_events(struct io_base *);
 /* ------------------------------------------------------------------------
  *  TCP client
  * ------------------------------------------------------------------------ */
-enum io_tcpc_event {
-    IO_TCPC_EVENT_CONNECTION_FAILED,
-    IO_TCPC_EVENT_CONNECTION_ESTABLISHED,
-    IO_TCPC_EVENT_CONNECTION_CLOSED,
-    IO_TCPC_EVENT_CONNECTION_LOST,
-    IO_TCPC_EVENT_ERROR,
-    IO_TCPC_EVENT_DATA_READ,
+enum io_tcp_client_event {
+    IO_TCP_CLIENT_EVENT_CONN_FAILED,
+    IO_TCP_CLIENT_EVENT_CONN_ESTABLISHED,
+    IO_TCP_CLIENT_EVENT_CONN_CLOSED,
+    IO_TCP_CLIENT_EVENT_CONN_LOST,
+    IO_TCP_CLIENT_EVENT_ERROR,
+    IO_TCP_CLIENT_EVENT_DATA_READ,
 };
 
-struct io_tcpc;
+struct io_tcp_client;
 
-typedef void (*io_tcpc_event_cb)(struct io_tcpc *, enum io_tcpc_event, void *);
+typedef void (*io_tcp_client_event_cb)(struct io_tcp_client *,
+                                       enum io_tcp_client_event, void *);
 
-struct io_tcpc *io_tcpc_new(struct io_base *, io_tcpc_event_cb, void *);
-void io_tcpc_delete(struct io_tcpc *);
+struct io_tcp_client *io_tcp_client_new(struct io_base *,
+                                        io_tcp_client_event_cb, void *);
+void io_tcp_client_delete(struct io_tcp_client *);
 
-struct c_buffer *io_tcpc_rbuf(const struct io_tcpc *);
+struct c_buffer *io_tcp_client_rbuf(const struct io_tcp_client *);
 
-int io_tcpc_connect(struct io_tcpc *, const char *, uint16_t);
-void io_tcpc_disconnect(struct io_tcpc *);
-void io_tcpc_close(struct io_tcpc *);
+int io_tcp_client_connect(struct io_tcp_client *, const char *, uint16_t);
+void io_tcp_client_disconnect(struct io_tcp_client *);
+void io_tcp_client_close(struct io_tcp_client *);
 
-int io_tcpc_write(struct io_tcpc *, const void *, size_t);
+int io_tcp_client_write(struct io_tcp_client *, const void *, size_t);
 
 /* ------------------------------------------------------------------------
  *  TCP server
  * ------------------------------------------------------------------------ */
-enum io_tcps_event {
-    IO_TCPS_EVENT_SERVER_LISTENING,
-    IO_TCPS_EVENT_SERVER_STOPPED,
-    IO_TCPS_EVENT_CONNECTION_ACCEPTED,
-    IO_TCPS_EVENT_CONNECTION_CLOSED,
-    IO_TCPS_EVENT_CONNECTION_LOST,
-    IO_TCPS_EVENT_ERROR,
-    IO_TCPS_EVENT_DATA_READ,
+enum io_tcp_server_event {
+    IO_TCP_SERVER_EVENT_SERVER_LISTENING,
+    IO_TCP_SERVER_EVENT_SERVER_STOPPED,
+    IO_TCP_SERVER_EVENT_CONN_ACCEPTED,
+    IO_TCP_SERVER_EVENT_CONN_CLOSED,
+    IO_TCP_SERVER_EVENT_CONN_LOST,
+    IO_TCP_SERVER_EVENT_ERROR,
+    IO_TCP_SERVER_EVENT_DATA_READ,
 };
 
-struct io_tcps;
-struct io_tcpsc;
+struct io_tcp_server;
+struct io_tcp_server_conn;
 
-typedef void (*io_tcps_event_cb)(struct io_tcps *, struct io_tcpsc *,
-                                 enum io_tcps_event, void *);
+typedef void (*io_tcp_server_event_cb)(struct io_tcp_server *,
+                                       struct io_tcp_server_conn *,
+                                       enum io_tcp_server_event, void *);
 
-struct io_tcps *io_tcps_new(struct io_base *, io_tcps_event_cb, void *);
-void io_tcps_delete(struct io_tcps *);
+struct io_tcp_server *io_tcp_server_new(struct io_base *,
+                                        io_tcp_server_event_cb, void *);
+void io_tcp_server_delete(struct io_tcp_server *);
 
-int io_tcps_listen(struct io_tcps *, const char *, uint16_t);
-void io_tcps_stop(struct io_tcps *);
-void io_tcps_close(struct io_tcps *);
+int io_tcp_server_listen(struct io_tcp_server *, const char *, uint16_t);
+void io_tcp_server_stop(struct io_tcp_server *);
+void io_tcp_server_close(struct io_tcp_server *);
 
-void io_tcpsc_disconnect(struct io_tcpsc *);
-void io_tcpsc_close(struct io_tcpsc *);
-struct c_buffer *io_tcpsc_rbuf(const struct io_tcpsc *);
-int io_tcpsc_write(struct io_tcpsc *, const void *, size_t);
+void io_tcp_server_conn_disconnect(struct io_tcp_server_conn *);
+void io_tcp_server_conn_close(struct io_tcp_server_conn *);
+struct c_buffer *io_tcp_server_conn_rbuf(const struct io_tcp_server_conn *);
+int io_tcp_server_conn_write(struct io_tcp_server_conn *, const void *, size_t);
 
 #endif

@@ -152,15 +152,15 @@ int io_base_read_events_backend(struct io_base *);
 /* ------------------------------------------------------------------------
  *  TCP client
  * ------------------------------------------------------------------------ */
-enum io_tcpc_state {
-    IO_TCPC_STATE_DISCONNECTED,
-    IO_TCPC_STATE_CONNECTING,
-    IO_TCPC_STATE_CONNECTED,
-    IO_TCPC_STATE_DISCONNECTING,
+enum io_tcp_client_state {
+    IO_TCP_CLIENT_STATE_DISCONNECTED,
+    IO_TCP_CLIENT_STATE_CONNECTING,
+    IO_TCP_CLIENT_STATE_CONNECTED,
+    IO_TCP_CLIENT_STATE_DISCONNECTING,
 };
 
-struct io_tcpc {
-    enum io_tcpc_state state;
+struct io_tcp_client {
+    enum io_tcp_client_state state;
 
     char *host;
     uint16_t port;
@@ -171,7 +171,7 @@ struct io_tcpc {
     struct c_buffer *rbuf;
     struct c_buffer *wbuf;
 
-    io_tcpc_event_cb event_cb;
+    io_tcp_client_event_cb event_cb;
     void *event_cb_arg;
 
     struct io_base *base;
@@ -180,14 +180,14 @@ struct io_tcpc {
 /* ------------------------------------------------------------------------
  *  TCP server
  * ------------------------------------------------------------------------ */
-enum io_tcpsc_state {
-    IO_TCPSC_STATE_DISCONNECTED,
-    IO_TCPSC_STATE_CONNECTED,
-    IO_TCPSC_STATE_DISCONNECTING,
+enum io_tcp_server_conn_state {
+    IO_TCP_SERVER_CONN_STATE_DISCONNECTED,
+    IO_TCP_SERVER_CONN_STATE_CONNECTED,
+    IO_TCP_SERVER_CONN_STATE_DISCONNECTING,
 };
 
-struct io_tcpsc {
-    enum io_tcpsc_state state;
+struct io_tcp_server_conn {
+    enum io_tcp_server_conn_state state;
 
     struct io_address addr;
     int sock;
@@ -195,24 +195,25 @@ struct io_tcpsc {
     struct c_buffer *rbuf;
     struct c_buffer *wbuf;
 
-    struct io_tcps *server;
+    struct io_tcp_server *server;
     struct c_queue_entry *queue_entry;
 };
 
-struct io_tcpsc *io_tcpsc_new(struct io_tcps *, int);
-void io_tcpsc_delete(struct io_tcpsc *);
+struct io_tcp_server_conn *
+io_tcp_server_conn_new(struct io_tcp_server *, int);
+void io_tcp_server_conn_delete(struct io_tcp_server_conn *);
 
-void io_tcpsc_discard(struct io_tcpsc *);
-void io_tcpsc_close_discard(struct io_tcpsc *);
+void io_tcp_server_conn_discard(struct io_tcp_server_conn *);
+void io_tcp_server_conn_close_discard(struct io_tcp_server_conn *);
 
-enum io_tcps_state {
-    IO_TCPS_STATE_STOPPED,
-    IO_TCPS_STATE_LISTENING,
-    IO_TCPS_STATE_STOPPING,
+enum io_tcp_server_state {
+    IO_TCP_SERVER_STATE_STOPPED,
+    IO_TCP_SERVER_STATE_LISTENING,
+    IO_TCP_SERVER_STATE_STOPPING,
 };
 
-struct io_tcps {
-    enum io_tcps_state state;
+struct io_tcp_server {
+    enum io_tcp_server_state state;
 
     char *host;
     uint16_t port;
@@ -222,14 +223,16 @@ struct io_tcps {
 
     struct c_queue *connections;
 
-    io_tcps_event_cb event_cb;
+    io_tcp_server_event_cb event_cb;
     void *event_cb_arg;
 
     struct io_base *base;
 };
 
-void io_tcps_add_connection(struct io_tcps *, struct io_tcpsc *);
-void io_tcps_remove_connection(struct io_tcps *, struct io_tcpsc *);
+void io_tcp_server_add_conn(struct io_tcp_server *,
+                            struct io_tcp_server_conn *);
+void io_tcp_server_remove_conn(struct io_tcp_server *,
+                               struct io_tcp_server_conn *);
 
 /* ------------------------------------------------------------------------
  *  Utils

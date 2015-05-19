@@ -1,0 +1,512 @@
+/*
+ * Developed by Nicolas Martyanoff
+ * Copyright (c) 2015 Celticom
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include "internal.h"
+
+/* ------------------------------------------------------------------------
+ *  Connection
+ * ------------------------------------------------------------------------ */
+static int io_tcp_server_conn_watch(struct io_tcp_server_conn *, uint32_t);
+static void io_tcp_server_conn_signal_event(struct io_tcp_server_conn *,
+                                            enum io_tcp_server_event);
+static void
+io_tcp_server_conn_signal_error(struct io_tcp_server_conn *, const char *, ...)
+    __attribute__((format(printf, 2, 3)));
+
+static void io_tcp_server_conn_on_event(int, uint32_t, void *);
+
+struct io_tcp_server_conn *
+io_tcp_server_conn_new(struct io_tcp_server *server, int sock) {
+    struct io_tcp_server_conn *conn;
+
+    conn = c_malloc0(sizeof(struct io_tcp_server_conn));
+
+    conn->state = IO_TCP_SERVER_CONN_STATE_CONNECTED;
+
+    conn->sock = sock;
+
+    conn->rbuf = c_buffer_new();
+    conn->wbuf = c_buffer_new();
+
+    conn->server = server;
+
+    return conn;
+}
+
+void
+io_tcp_server_conn_delete(struct io_tcp_server_conn *conn) {
+    if (!conn)
+        return;
+
+    c_buffer_delete(conn->rbuf);
+    c_buffer_delete(conn->wbuf);
+
+    c_free0(conn, sizeof(struct io_tcp_server_conn));
+}
+
+void
+io_tcp_server_conn_discard(struct io_tcp_server_conn *conn) {
+    assert(conn->state == IO_TCP_SERVER_CONN_STATE_DISCONNECTED);
+
+    io_tcp_server_remove_conn(conn->server, conn);
+    io_tcp_server_conn_delete(conn);
+}
+
+void
+io_tcp_server_conn_close_discard(struct io_tcp_server_conn *conn) {
+    io_tcp_server_conn_close(conn);
+    io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_CONN_CLOSED);
+
+    io_tcp_server_conn_discard(conn);
+}
+
+void
+io_tcp_server_conn_disconnect(struct io_tcp_server_conn *conn) {
+    assert(conn->state == IO_TCP_SERVER_CONN_STATE_CONNECTED);
+
+    if (c_buffer_length(conn->wbuf) == 0) {
+        io_tcp_server_conn_close_discard(conn);
+        return;
+    }
+
+    if (shutdown(conn->sock, SHUT_RD) == -1) {
+        io_tcp_server_conn_signal_error(conn, "cannot shutdown socket: %s",
+                                        strerror(errno));
+
+        io_tcp_server_conn_close_discard(conn);
+        return;
+    }
+
+    if (io_tcp_server_conn_watch(conn, IO_EVENT_FD_WRITE) == -1) {
+        io_tcp_server_conn_signal_error(conn, "%s", c_get_error());
+        io_tcp_server_conn_close_discard(conn);
+        return;
+    }
+
+    conn->state = IO_TCP_SERVER_CONN_STATE_DISCONNECTING;
+}
+
+void
+io_tcp_server_conn_close(struct io_tcp_server_conn *conn) {
+    if (conn->state == IO_TCP_SERVER_CONN_STATE_DISCONNECTED)
+        return;
+
+    if (io_base_unwatch_fd(conn->server->base, conn->sock) == -1) {
+        io_tcp_server_conn_signal_error(conn, "cannot unwatch socket: %s",
+                              c_get_error());
+    }
+
+    close(conn->sock);
+    conn->sock = -1;
+
+    conn->state = IO_TCP_SERVER_CONN_STATE_DISCONNECTED;
+}
+
+int
+io_tcp_server_conn_write(struct io_tcp_server_conn *conn,
+                         const void *data, size_t sz) {
+    assert(conn->state == IO_TCP_SERVER_CONN_STATE_CONNECTED);
+
+    if (sz == 0)
+        return 0;
+
+    c_buffer_add(conn->wbuf, data, sz);
+
+    return io_tcp_server_conn_watch(conn, IO_EVENT_FD_READ | IO_EVENT_FD_WRITE);
+}
+
+struct c_buffer *
+io_tcp_server_conn_rbuf(const struct io_tcp_server_conn *conn) {
+    return conn->rbuf;
+}
+
+static int
+io_tcp_server_conn_watch(struct io_tcp_server_conn *conn, uint32_t events) {
+    if (io_base_watch_fd(conn->server->base, conn->sock, events,
+                         io_tcp_server_conn_on_event, conn) == -1) {
+        c_set_error("cannot watch socket: %s", c_get_error());
+        return -1;
+    }
+
+    return 0;
+}
+
+static void
+io_tcp_server_conn_signal_event(struct io_tcp_server_conn *conn,
+                                enum io_tcp_server_event event) {
+    struct io_tcp_server *server;
+
+    server = conn->server;
+
+    if (!server->event_cb)
+        return;
+
+    server->event_cb(server, conn, event, server->event_cb_arg);
+}
+
+static void
+io_tcp_server_conn_signal_error(struct io_tcp_server_conn *conn,
+                                const char *fmt, ...) {
+    char buf[C_ERROR_BUFSZ];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, C_ERROR_BUFSZ, fmt, ap);
+    va_end(ap);
+
+    c_set_error("%s", buf);
+    io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_ERROR);
+}
+
+static void
+io_tcp_server_conn_on_event(int sock, uint32_t events, void *arg) {
+    struct io_tcp_server_conn *conn;
+
+    conn = arg;
+
+    assert(conn->state == IO_TCP_SERVER_CONN_STATE_CONNECTED
+        || conn->state == IO_TCP_SERVER_CONN_STATE_DISCONNECTING);
+
+    if (events & IO_EVENT_FD_READ) {
+        ssize_t ret;
+
+        ret = c_buffer_read(conn->rbuf, conn->sock, BUFSIZ);
+        if (ret == -1) {
+            io_tcp_server_conn_signal_error(conn, "cannot read socket: %s",
+                                            c_get_error());
+            io_tcp_server_conn_close_discard(conn);
+            return;
+        } else if (ret == 0) {
+            io_tcp_server_conn_close_discard(conn);
+            return;
+        }
+
+        io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_DATA_READ);
+        if (conn->state == IO_TCP_SERVER_EVENT_CONN_CLOSED) {
+            io_tcp_server_conn_discard(conn);
+            return;
+        }
+    }
+
+    if (events & IO_EVENT_FD_WRITE) {
+        if (c_buffer_write(conn->wbuf, conn->sock) == -1) {
+            io_tcp_server_conn_signal_error(conn, "cannot write socket: %s",
+                                            strerror(errno));
+            io_tcp_server_conn_close_discard(conn);
+            return;
+        }
+
+        if (c_buffer_length(conn->wbuf) == 0) {
+            if (conn->state == IO_TCP_SERVER_CONN_STATE_DISCONNECTING) {
+                io_tcp_server_conn_close_discard(conn);
+                return;
+            }
+
+            if (io_tcp_server_conn_watch(conn, IO_EVENT_FD_READ) == -1) {
+                io_tcp_server_conn_signal_error(conn, "%s", c_get_error());
+                io_tcp_server_conn_close_discard(conn);
+                return;
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------------
+ *  Server
+ * ------------------------------------------------------------------------ */
+static void io_tcp_server_signal_event(struct io_tcp_server *,
+                                       enum io_tcp_server_event);
+static void io_tcp_server_signal_error(struct io_tcp_server *,
+                                       const char *, ...)
+    __attribute__((format(printf, 2, 3)));
+
+static void io_tcp_server_on_event(int, uint32_t, void *);
+
+struct io_tcp_server *
+io_tcp_server_new(struct io_base *base, io_tcp_server_event_cb cb,
+                  void *cb_arg) {
+    struct io_tcp_server *server;
+
+    server = c_malloc0(sizeof(struct io_tcp_server));
+
+    server->state = IO_TCP_SERVER_STATE_STOPPED;
+
+    server->connections = c_queue_new();
+
+    server->event_cb = cb;
+    server->event_cb_arg = cb_arg;
+
+    server->base = base;
+
+    return server;
+}
+
+void
+io_tcp_server_delete(struct io_tcp_server *server) {
+    if (!server)
+        return;
+
+    c_free(server->host);
+
+    c_free(server->socks);
+
+    c_queue_delete(server->connections);
+
+    c_free0(server, sizeof(struct io_tcp_server));
+}
+
+int
+io_tcp_server_listen(struct io_tcp_server *server,
+                     const char *host, uint16_t port) {
+    struct io_address *addrs;
+    size_t nb_addrs;
+    int *socks;
+
+    assert(server->state == IO_TCP_SERVER_STATE_STOPPED);
+
+    if (io_address_resolve(host, port, AF_UNSPEC, SOCK_STREAM, IPPROTO_TCP,
+                           &addrs, &nb_addrs) == -1) {
+        c_set_error("cannot resolve address: %s", c_get_error());
+        return -1;
+    }
+
+    socks = c_calloc(nb_addrs, sizeof(int));
+
+    for (size_t i = 0; i < nb_addrs; i++) {
+        struct io_address *addr;
+        int sock, opt;
+
+        addr = addrs + i;
+
+        sock = socket(io_address_family(addr), SOCK_STREAM, IPPROTO_TCP);
+        if (sock == -1) {
+            c_set_error("cannot create socket: %s", strerror(errno));
+            goto error;
+        }
+
+        opt = 1;
+        if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
+                       &opt, sizeof(int)) == -1) {
+            c_set_error("cannot set SO_REUSEADDR: %s", strerror(errno));
+            close(sock);
+            goto error;
+        }
+
+        if (bind(sock, io_address_sockaddr(addr),
+                 io_address_length(addr)) == -1) {
+            c_set_error("cannot bind socket: %s", c_get_error());
+            close(sock);
+            goto error;
+        }
+
+        if (listen(sock, 10) == -1) {
+            c_set_error("cannot listen on socket: %s", c_get_error());
+            close(sock);
+            goto error;
+        }
+
+        if (io_base_watch_fd(server->base, sock, IO_EVENT_FD_READ,
+                             io_tcp_server_on_event, server) == -1) {
+            c_set_error("cannot watch socket: %s", c_get_error());
+            close(sock);
+            goto error;
+        }
+
+        socks[i] = sock;
+    }
+
+    c_free(server->host);
+    server->host = c_strdup(host);
+    server->port = port;
+
+    server->nb_socks = nb_addrs;
+    server->socks = socks;
+
+    server->state = IO_TCP_SERVER_STATE_LISTENING;
+
+    io_tcp_server_signal_event(server, IO_TCP_SERVER_EVENT_SERVER_LISTENING);
+
+    c_free(addrs);
+    return 0;
+
+error:
+    c_free(socks);
+    c_free(addrs);
+    return -1;
+}
+
+void
+io_tcp_server_stop(struct io_tcp_server *server) {
+    struct c_queue_entry *entry;
+
+    assert(server->state == IO_TCP_SERVER_STATE_LISTENING);
+
+    for (size_t i = 0; i < server->nb_socks; i++) {
+        int sock;
+
+        sock = server->socks[i];
+
+        if (io_base_unwatch_fd(server->base, sock) == -1) {
+            io_tcp_server_signal_error(server, "cannot unwatch socket: %s",
+                                       c_get_error());
+        }
+    }
+
+    /* The proper way would be disconnect all connections and wait for the
+     * last one to be closed, then close the server. Infortunately, it means
+     * checking whether the connection list is empty or not each time a
+     * conn is removed. I have to do it one day... */
+
+    entry = c_queue_first_entry(server->connections);
+    while (entry) {
+        struct io_tcp_server_conn *conn;
+
+        conn = c_queue_entry_value(entry);
+
+        io_tcp_server_conn_close(conn);
+        io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_CONN_CLOSED);
+        io_tcp_server_conn_delete(conn);
+
+        entry = c_queue_entry_next(entry);
+    }
+
+    c_queue_clear(server->connections);
+
+    io_tcp_server_close(server);
+    io_tcp_server_signal_event(server, IO_TCP_SERVER_EVENT_SERVER_STOPPED);
+}
+
+void
+io_tcp_server_close(struct io_tcp_server *server) {
+    struct c_queue_entry *entry;
+
+    if (server->state == IO_TCP_SERVER_STATE_STOPPED)
+        return;
+
+    for (size_t i = 0; i < server->nb_socks; i++) {
+        close(server->socks[i]);
+        server->socks[i] = -1;
+    }
+
+    entry = c_queue_first_entry(server->connections);
+    while (entry) {
+        struct io_tcp_server_conn *conn;
+
+        conn = c_queue_entry_value(entry);
+
+        io_tcp_server_conn_close(conn);
+        io_tcp_server_conn_delete(conn);
+
+        entry = c_queue_entry_next(entry);
+    }
+
+    c_queue_clear(server->connections);
+
+    server->state = IO_TCP_SERVER_STATE_STOPPED;
+}
+
+void
+io_tcp_server_add_conn(struct io_tcp_server *server,
+                       struct io_tcp_server_conn *conn) {
+    assert(!conn->queue_entry);
+
+    c_queue_push(server->connections, conn);
+    conn->queue_entry = c_queue_last_entry(server->connections);
+}
+
+void
+io_tcp_server_remove_conn(struct io_tcp_server *server,
+                          struct io_tcp_server_conn *conn) {
+    assert(conn->queue_entry);
+
+    c_queue_remove_entry(server->connections, conn->queue_entry);
+    c_queue_entry_delete(conn->queue_entry);
+    conn->queue_entry = NULL;
+}
+
+static void
+io_tcp_server_signal_event(struct io_tcp_server *server,
+                           enum io_tcp_server_event event) {
+    if (!server->event_cb)
+        return;
+
+    server->event_cb(server, NULL, event, server->event_cb_arg);
+}
+
+static void
+io_tcp_server_signal_error(struct io_tcp_server *server, const char *fmt, ...) {
+    char buf[C_ERROR_BUFSZ];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, C_ERROR_BUFSZ, fmt, ap);
+    va_end(ap);
+
+    c_set_error("%s", buf);
+    io_tcp_server_signal_event(server, IO_TCP_SERVER_EVENT_ERROR);
+}
+
+static void
+io_tcp_server_on_event(int sock, uint32_t events, void *arg) {
+    struct io_tcp_server *server;
+    struct io_tcp_server_conn *conn;
+    struct sockaddr_storage ss;
+    socklen_t ss_len;
+    struct io_address addr;
+    int csock;
+
+    server = arg;
+
+    assert(server->state == IO_TCP_SERVER_STATE_LISTENING);
+    assert(events & IO_EVENT_FD_READ);
+
+    ss_len = sizeof(struct sockaddr_storage);
+    csock = accept(sock, (struct sockaddr *)&ss, &ss_len);
+    if (csock == -1) {
+        io_tcp_server_signal_error(server, "cannot accept connection: %s",
+                                   c_get_error());
+        return;
+    }
+
+    if (io_address_init_from_sockaddr_storage(&addr, &ss) == -1) {
+        io_tcp_server_signal_error(server,
+                                   "cannot initialize connection address: %s",
+                                   c_get_error());
+        close(sock);
+    }
+
+    conn = io_tcp_server_conn_new(server, csock);
+    conn->addr = addr;
+
+    if (io_tcp_server_conn_watch(conn, IO_EVENT_FD_READ) == -1) {
+        io_tcp_server_conn_signal_error(conn, "%s", c_get_error());
+
+        io_tcp_server_conn_close(conn);
+        io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_CONN_CLOSED);
+
+        io_tcp_server_conn_delete(conn);
+        return;
+    }
+
+    io_tcp_server_add_conn(server, conn);
+
+    io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_CONN_ACCEPTED);
+    if (conn->state == IO_TCP_SERVER_EVENT_CONN_CLOSED) {
+        io_tcp_server_conn_discard(conn);
+        return;
+    }
+}

@@ -24,7 +24,7 @@
 
 struct ioex {
     struct io_base *base;
-    struct io_tcps *server;
+    struct io_tcp_server *server;
     bool do_exit;
 };
 
@@ -32,8 +32,9 @@ static void ioex_die(const char *, ...)
     __attribute__ ((format(printf, 1, 2), noreturn));
 
 static void ioex_on_signal(int, void *);
-static void ioex_on_server_event(struct io_tcps *, struct io_tcpsc *,
-                                 enum io_tcps_event, void *);
+static void ioex_on_server_event(struct io_tcp_server *,
+                                 struct io_tcp_server_conn *,
+                                 enum io_tcp_server_event, void *);
 
 static struct ioex ioex;
 
@@ -64,8 +65,8 @@ main(int argc, char **argv) {
     if (io_base_watch_signal(ioex.base, SIGTERM, ioex_on_signal, NULL) == -1)
         ioex_die("cannot watch signal: %s", c_get_error());
 
-    ioex.server = io_tcps_new(ioex.base, ioex_on_server_event, NULL);
-    if (io_tcps_listen(ioex.server, host, port) == -1)
+    ioex.server = io_tcp_server_new(ioex.base, ioex_on_server_event, NULL);
+    if (io_tcp_server_listen(ioex.server, host, port) == -1)
         ioex_die("cannot listen: %s", c_get_error());
 
     while (!ioex.do_exit) {
@@ -73,7 +74,7 @@ main(int argc, char **argv) {
             ioex_die("cannot read events: %s", c_get_error());
     }
 
-    io_tcps_delete(ioex.server);
+    io_tcp_server_delete(ioex.server);
     io_base_delete(ioex.base);
 
     c_command_line_delete(cmdline);
@@ -101,59 +102,60 @@ ioex_on_signal(int signo, void *arg) {
     switch (signo) {
     case SIGINT:
     case SIGTERM:
-        io_tcps_stop(ioex.server);
+        io_tcp_server_stop(ioex.server);
         break;
     }
 }
 
 static void
-ioex_on_server_event(struct io_tcps *server, struct io_tcpsc *connection,
-                     enum io_tcps_event event, void *arg) {
+ioex_on_server_event(struct io_tcp_server *server,
+                     struct io_tcp_server_conn *conn,
+                     enum io_tcp_server_event event, void *arg) {
     struct c_buffer *rbuf;
     const char *string;
 
-    if (connection)
-        rbuf = io_tcpsc_rbuf(connection);
+    if (conn)
+        rbuf = io_tcp_server_conn_rbuf(conn);
 
     switch (event) {
-    case IO_TCPS_EVENT_SERVER_LISTENING:
+    case IO_TCP_SERVER_EVENT_SERVER_LISTENING:
         printf("server listening\n");
         break;
 
-    case IO_TCPS_EVENT_SERVER_STOPPED:
+    case IO_TCP_SERVER_EVENT_SERVER_STOPPED:
         printf("server stopped\n");
         ioex.do_exit = true;
         break;
 
-    case IO_TCPS_EVENT_CONNECTION_ACCEPTED:
+    case IO_TCP_SERVER_EVENT_CONN_ACCEPTED:
         printf("connection accepted\n");
 
         string = "hello world\n";
-        if (io_tcpsc_write(connection, string, strlen(string)) == -1)
+        if (io_tcp_server_conn_write(conn, string, strlen(string)) == -1)
             ioex_die("cannot write to connection: %s", c_get_error());
         break;
 
-    case IO_TCPS_EVENT_CONNECTION_CLOSED:
+    case IO_TCP_SERVER_EVENT_CONN_CLOSED:
         printf("connection closed\n");
         break;
 
-    case IO_TCPS_EVENT_CONNECTION_LOST:
+    case IO_TCP_SERVER_EVENT_CONN_LOST:
         printf("connection lost\n");
         break;
 
-    case IO_TCPS_EVENT_ERROR:
+    case IO_TCP_SERVER_EVENT_ERROR:
         printf("error: %s\n", c_get_error());
         break;
 
-    case IO_TCPS_EVENT_DATA_READ:
+    case IO_TCP_SERVER_EVENT_DATA_READ:
         printf("%zu bytes read\n", c_buffer_length(rbuf));
         c_buffer_clear(rbuf);
 
         string = "bye\n";
-        if (io_tcpsc_write(connection, string, strlen(string)) == -1)
+        if (io_tcp_server_conn_write(conn, string, strlen(string)) == -1)
             ioex_die("cannot write to connection: %s", c_get_error());
 
-        io_tcpsc_disconnect(connection);
+        io_tcp_server_conn_disconnect(conn);
         break;
     }
 }
