@@ -24,7 +24,10 @@ static void io_tcp_client_signal_error(struct io_tcp_client *,
                                        const char *, ...)
     __attribute__((format(printf, 2, 3)));
 
+static void io_tcp_client_on_conn_established(struct io_tcp_client *);
+
 static void io_tcp_client_on_event_connecting(int, uint32_t, void *);
+static void io_tcp_client_on_event_ssl_connecting(int, uint32_t, void *);
 static void io_tcp_client_on_event(int, uint32_t, void *);
 
 struct io_tcp_client *
@@ -60,6 +63,22 @@ io_tcp_client_delete(struct io_tcp_client *client) {
     c_buffer_delete(client->wbuf);
 
     c_free0(client, sizeof(struct io_tcp_client));
+}
+
+int
+io_tcp_client_enable_ssl(struct io_tcp_client *client,
+                         const struct io_ssl_cfg *cfg) {
+    SSL_CTX *ctx;
+
+    assert(!client->uses_ssl);
+
+    ctx = io_ssl_ctx_new_client(cfg);
+    if (!ctx)
+        return -1;
+
+    client->uses_ssl = true;
+    client->ssl_ctx = ctx;
+    return 0;
 }
 
 struct c_buffer *
@@ -121,6 +140,7 @@ io_tcp_client_connect(struct io_tcp_client *client,
 void
 io_tcp_client_disconnect(struct io_tcp_client *client) {
     assert(client->state == IO_TCP_CLIENT_STATE_CONNECTING
+        || client->state == IO_TCP_CLIENT_STATE_SSL_CONNECTING
         || client->state == IO_TCP_CLIENT_STATE_CONNECTED);
 
     if (client->state == IO_TCP_CLIENT_STATE_CONNECTING) {
@@ -171,6 +191,14 @@ io_tcp_client_close(struct io_tcp_client *client) {
     c_buffer_clear(client->rbuf);
     c_buffer_clear(client->wbuf);
 
+    if (client->uses_ssl) {
+        io_ssl_ctx_delete(client->ssl_ctx);
+        client->ssl_ctx = NULL;
+
+        io_ssl_delete(client->ssl);
+        client->ssl = NULL;
+    }
+
     client->state = IO_TCP_CLIENT_STATE_DISCONNECTED;
 }
 
@@ -184,6 +212,51 @@ io_tcp_client_write(struct io_tcp_client *client, const void *data, size_t sz) {
     c_buffer_add(client->wbuf, data, sz);
 
     return io_tcp_client_watch(client, IO_EVENT_FD_READ | IO_EVENT_FD_WRITE);
+}
+
+int
+io_tcp_client_ssl_connect(struct io_tcp_client *client) {
+    int ret;
+
+    assert(client->state == IO_TCP_CLIENT_STATE_SSL_CONNECTING);
+    assert(client->uses_ssl);
+
+    ret = SSL_connect(client->ssl);
+    if (ret != 1) {
+        int err;
+
+        err = SSL_get_error(client->ssl, ret);
+
+        switch (err) {
+        case SSL_ERROR_WANT_READ:
+            if (io_base_watch_fd(client->base, client->sock, IO_EVENT_FD_READ,
+                                 io_tcp_client_on_event_ssl_connecting,
+                                 client) == -1) {
+                c_set_error("cannot watch socket: %s", c_get_error());
+                return -1;
+            }
+            break;
+
+        case SSL_ERROR_WANT_WRITE:
+            if (io_base_watch_fd(client->base, client->sock, IO_EVENT_FD_WRITE,
+                                 io_tcp_client_on_event_ssl_connecting,
+                                 client) == -1) {
+                c_set_error("cannot watch socket: %s", c_get_error());
+                return -1;
+            }
+            break;
+
+        default:
+            c_set_error("cannot establish ssl connection: %s",
+                        io_ssl_get_error());
+            return -1;
+        }
+
+        return 0;
+    }
+
+    client->state = IO_TCP_CLIENT_STATE_CONNECTED;
+    return 0;
 }
 
 static int
@@ -220,9 +293,31 @@ io_tcp_client_signal_error(struct io_tcp_client *client, const char *fmt, ...) {
 }
 
 static void
+io_tcp_client_on_conn_established(struct io_tcp_client *client) {
+    uint32_t wevents;
+
+    assert(client->state == IO_TCP_CLIENT_STATE_CONNECTED);
+
+    io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_ESTABLISHED);
+
+    /* Watch the socket. Note that the event handler may have written data; in
+     * that case, we must watch for write events. */
+    wevents = IO_EVENT_FD_READ;
+    if (c_buffer_length(client->wbuf) > 0)
+        wevents |= IO_EVENT_FD_WRITE;
+
+    if (io_tcp_client_watch(client, wevents) == -1) {
+        io_tcp_client_signal_error(client, "%s", c_get_error());
+
+        io_tcp_client_close(client);
+        io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+        return;
+    }
+}
+
+static void
 io_tcp_client_on_event_connecting(int sock, uint32_t events, void *arg) {
     struct io_tcp_client *client;
-    uint32_t wevents;
     socklen_t len;
     int error;
 
@@ -253,22 +348,53 @@ io_tcp_client_on_event_connecting(int sock, uint32_t events, void *arg) {
     }
 
     /* The connection is now established */
-    client->state = IO_TCP_CLIENT_STATE_CONNECTED;
-    io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_ESTABLISHED);
+    if (client->uses_ssl) {
+        client->state = IO_TCP_CLIENT_STATE_SSL_CONNECTING;
 
-    /* Watch the socket. Note that the event handler may have written data; in
-     * that case, we must watch for write events. */
-    wevents = IO_EVENT_FD_READ;
-    if (c_buffer_length(client->wbuf) > 0)
-        wevents |= IO_EVENT_FD_WRITE;
+        client->ssl = io_ssl_new(client->ssl_ctx, client->sock);
+        if (!client->ssl) {
+            io_tcp_client_signal_error(client, "%s", c_get_error());
 
-    if (io_tcp_client_watch(client, wevents) == -1) {
+            io_tcp_client_close(client);
+            io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+            return;
+        }
+
+        if (io_tcp_client_ssl_connect(client) == -1) {
+            io_tcp_client_signal_error(client, "%s", c_get_error());
+
+            io_tcp_client_close(client);
+            io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+            return;
+        }
+
+        if (client->state == IO_TCP_CLIENT_STATE_CONNECTED)
+            io_tcp_client_on_conn_established(client);
+    } else {
+        client->state = IO_TCP_CLIENT_STATE_CONNECTED;
+        io_tcp_client_on_conn_established(client);
+    }
+}
+
+static void
+io_tcp_client_on_event_ssl_connecting(int sock, uint32_t events, void *arg) {
+    struct io_tcp_client *client;
+
+    client = arg;
+
+    assert(client->state == IO_TCP_CLIENT_STATE_SSL_CONNECTING);
+    assert(client->uses_ssl);
+
+    if (io_tcp_client_ssl_connect(client) == -1) {
         io_tcp_client_signal_error(client, "%s", c_get_error());
 
         io_tcp_client_close(client);
         io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
         return;
     }
+
+    if (client->state == IO_TCP_CLIENT_STATE_CONNECTED)
+        io_tcp_client_on_conn_established(client);
 }
 
 static void
@@ -283,10 +409,15 @@ io_tcp_client_on_event(int sock, uint32_t events, void *arg) {
     if (events & IO_EVENT_FD_READ) {
         ssize_t ret;
 
-        ret = c_buffer_read(client->rbuf, client->sock, BUFSIZ);
+        if (client->uses_ssl) {
+            ret = io_ssl_read(client->ssl, client->rbuf, BUFSIZ);
+        } else {
+            ret = c_buffer_read(client->rbuf, client->sock, BUFSIZ);
+        }
+
         if (ret == -1) {
             io_tcp_client_signal_error(client, "cannot read socket: %s",
-                                 c_get_error());
+                                       c_get_error());
 
             io_tcp_client_close(client);
             io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
@@ -306,7 +437,16 @@ io_tcp_client_on_event(int sock, uint32_t events, void *arg) {
     }
 
     if (events & IO_EVENT_FD_WRITE) {
-        if (c_buffer_write(client->wbuf, client->sock) == -1) {
+        ssize_t ret;
+
+        if (client->uses_ssl) {
+            ret = io_ssl_write(client->ssl, client->wbuf,
+                               &client->ssl_last_write_sz);
+        } else {
+            ret = c_buffer_write(client->wbuf, client->sock);
+        }
+
+        if (ret == -1) {
             io_tcp_client_signal_error(client, "cannot write socket: %s",
                                  strerror(errno));
 

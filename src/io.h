@@ -128,8 +128,21 @@ bool io_base_has_watchers(const struct io_base *);
 int io_base_read_events(struct io_base *);
 
 /* ------------------------------------------------------------------------
- *  TCP client
+ *  TCP
  * ------------------------------------------------------------------------ */
+/* SSL */
+struct io_ssl_cfg {
+    const char *ca_cert_path;
+    const char *cert_path;
+    const char *key_path;
+    const char *dh_path;
+    const char *ciphers;
+};
+
+void io_ssl_initialize(void);
+void io_ssl_shutdown(void);
+
+/* Client */
 enum io_tcp_client_event {
     IO_TCP_CLIENT_EVENT_CONN_FAILED,
     IO_TCP_CLIENT_EVENT_CONN_ESTABLISHED,
@@ -148,6 +161,8 @@ struct io_tcp_client *io_tcp_client_new(struct io_base *,
                                         io_tcp_client_event_cb, void *);
 void io_tcp_client_delete(struct io_tcp_client *);
 
+int io_tcp_client_enable_ssl(struct io_tcp_client *, const struct io_ssl_cfg *);
+
 struct c_buffer *io_tcp_client_rbuf(const struct io_tcp_client *);
 
 int io_tcp_client_connect(struct io_tcp_client *, const char *, uint16_t);
@@ -156,9 +171,7 @@ void io_tcp_client_close(struct io_tcp_client *);
 
 int io_tcp_client_write(struct io_tcp_client *, const void *, size_t);
 
-/* ------------------------------------------------------------------------
- *  TCP server
- * ------------------------------------------------------------------------ */
+/* Server */
 enum io_tcp_server_event {
     IO_TCP_SERVER_EVENT_SERVER_LISTENING,
     IO_TCP_SERVER_EVENT_SERVER_STOPPED,

@@ -41,9 +41,15 @@ int
 main(int argc, char **argv) {
     struct c_command_line *cmdline;
     const char *host, *port_string;
+    bool use_ssl;
+    const char *ca_cert;
     uint16_t port;
 
     cmdline = c_command_line_new();
+
+    c_command_line_add_flag(cmdline, "s", "ssl", "use ssl");
+    c_command_line_add_option(cmdline, NULL, "ca-cert", "the ssl ca certificate",
+                              "path", NULL);
 
     c_command_line_add_argument(cmdline, "the host to connect to", "host");
     c_command_line_add_argument(cmdline, "the port to connect to", "port");
@@ -57,6 +63,13 @@ main(int argc, char **argv) {
     if (c_parse_u16(port_string, &port, NULL) == -1)
         ioex_die("invalid port number: %s", c_get_error());
 
+    use_ssl = c_command_line_is_option_set(cmdline, "ssl");
+    if (use_ssl)
+        ca_cert = c_command_line_option_value(cmdline, "ca-cert");
+
+    if (use_ssl)
+        io_ssl_initialize();
+
     ioex.base = io_base_new();
 
     if (io_base_watch_signal(ioex.base, SIGINT, ioex_on_signal, NULL) == -1)
@@ -65,6 +78,17 @@ main(int argc, char **argv) {
         ioex_die("cannot watch signal: %s", c_get_error());
 
     ioex.client = io_tcp_client_new(ioex.base, ioex_on_client_event, NULL);
+
+    if (use_ssl) {
+        struct io_ssl_cfg cfg;
+
+        memset(&cfg, 0, sizeof(struct io_ssl_cfg));
+        cfg.ca_cert_path = ca_cert;
+
+        if (io_tcp_client_enable_ssl(ioex.client, &cfg) == -1)
+            ioex_die("cannot enable ssl: %s", c_get_error());
+    }
+
     if (io_tcp_client_connect(ioex.client, host, port) == -1)
         ioex_die("cannot connect client: %s", c_get_error());
 
@@ -75,6 +99,9 @@ main(int argc, char **argv) {
 
     io_tcp_client_delete(ioex.client);
     io_base_delete(ioex.base);
+
+    if (use_ssl)
+        io_ssl_shutdown();
 
     c_command_line_delete(cmdline);
     return 0;

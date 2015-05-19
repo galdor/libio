@@ -150,11 +150,25 @@ int io_base_disable_timer_backend(struct io_base *, struct io_watcher *);
 int io_base_read_events_backend(struct io_base *);
 
 /* ------------------------------------------------------------------------
- *  TCP client
+ *  TCP
  * ------------------------------------------------------------------------ */
+/* SSL */
+const char *io_ssl_get_error(void);
+
+SSL_CTX *io_ssl_ctx_new_client(const struct io_ssl_cfg *);
+void io_ssl_ctx_delete(SSL_CTX *);
+
+SSL *io_ssl_new(SSL_CTX *, int);
+void io_ssl_delete(SSL *);
+
+ssize_t io_ssl_read(SSL *, struct c_buffer *, size_t);
+ssize_t io_ssl_write(SSL *, struct c_buffer *, size_t *);
+
+/* Client */
 enum io_tcp_client_state {
     IO_TCP_CLIENT_STATE_DISCONNECTED,
     IO_TCP_CLIENT_STATE_CONNECTING,
+    IO_TCP_CLIENT_STATE_SSL_CONNECTING,
     IO_TCP_CLIENT_STATE_CONNECTED,
     IO_TCP_CLIENT_STATE_DISCONNECTING,
 };
@@ -175,11 +189,16 @@ struct io_tcp_client {
     void *event_cb_arg;
 
     struct io_base *base;
+
+    bool uses_ssl;
+    SSL_CTX *ssl_ctx;
+    SSL *ssl;
+    size_t ssl_last_write_sz;
 };
 
-/* ------------------------------------------------------------------------
- *  TCP server
- * ------------------------------------------------------------------------ */
+int io_tcp_client_ssl_connect(struct io_tcp_client *);
+
+/* Server connection */
 enum io_tcp_server_conn_state {
     IO_TCP_SERVER_CONN_STATE_DISCONNECTED,
     IO_TCP_SERVER_CONN_STATE_CONNECTED,
@@ -206,6 +225,7 @@ void io_tcp_server_conn_delete(struct io_tcp_server_conn *);
 void io_tcp_server_conn_discard(struct io_tcp_server_conn *);
 void io_tcp_server_conn_close_discard(struct io_tcp_server_conn *);
 
+/* Server */
 enum io_tcp_server_state {
     IO_TCP_SERVER_STATE_STOPPED,
     IO_TCP_SERVER_STATE_LISTENING,
