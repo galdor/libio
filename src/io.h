@@ -193,6 +193,8 @@ struct io_tcp_server *io_tcp_server_new(struct io_base *,
                                         io_tcp_server_event_cb, void *);
 void io_tcp_server_delete(struct io_tcp_server *);
 
+int io_tcp_server_enable_ssl(struct io_tcp_server *, const struct io_ssl_cfg *);
+
 int io_tcp_server_listen(struct io_tcp_server *, const char *, uint16_t);
 void io_tcp_server_stop(struct io_tcp_server *);
 void io_tcp_server_close(struct io_tcp_server *);

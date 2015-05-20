@@ -41,9 +41,9 @@ int
 main(int argc, char **argv) {
     struct c_command_line *cmdline;
     const char *host, *port_string;
+    uint16_t port;
     bool use_ssl;
     const char *ca_cert;
-    uint16_t port;
 
     cmdline = c_command_line_new();
 

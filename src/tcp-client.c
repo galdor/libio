@@ -180,9 +180,11 @@ io_tcp_client_close(struct io_tcp_client *client) {
     if (client->state == IO_TCP_CLIENT_STATE_DISCONNECTED)
         return;
 
-    if (io_base_unwatch_fd(client->base, client->sock) == -1) {
-        io_tcp_client_signal_error(client, "cannot unwatch socket: %s",
-                             c_get_error());
+    if (io_base_is_fd_watched(client->base, client->sock)) {
+        if (io_base_unwatch_fd(client->base, client->sock) == -1) {
+            io_tcp_client_signal_error(client, "cannot unwatch socket: %s",
+                                 c_get_error());
+        }
     }
 
     close(client->sock);
@@ -197,6 +199,8 @@ io_tcp_client_close(struct io_tcp_client *client) {
 
         io_ssl_delete(client->ssl);
         client->ssl = NULL;
+
+        client->ssl_last_write_sz = 0;
     }
 
     client->state = IO_TCP_CLIENT_STATE_DISCONNECTED;

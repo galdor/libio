@@ -27,6 +27,9 @@ static void
 io_tcp_server_conn_signal_error(struct io_tcp_server_conn *, const char *, ...)
     __attribute__((format(printf, 2, 3)));
 
+static void io_tcp_server_conn_on_connected(struct io_tcp_server_conn *);
+
+static void io_tcp_server_conn_on_event_ssl_accepting(int, uint32_t, void *);
 static void io_tcp_server_conn_on_event(int, uint32_t, void *);
 
 struct io_tcp_server_conn *
@@ -35,7 +38,7 @@ io_tcp_server_conn_new(struct io_tcp_server *server, int sock) {
 
     conn = c_malloc0(sizeof(struct io_tcp_server_conn));
 
-    conn->state = IO_TCP_SERVER_CONN_STATE_CONNECTED;
+    conn->state = IO_TCP_SERVER_CONN_STATE_DISCONNECTED;
 
     conn->sock = sock;
 
@@ -56,6 +59,54 @@ io_tcp_server_conn_delete(struct io_tcp_server_conn *conn) {
     c_buffer_delete(conn->wbuf);
 
     c_free0(conn, sizeof(struct io_tcp_server_conn));
+}
+
+int
+io_tcp_server_conn_ssl_accept(struct io_tcp_server_conn *conn) {
+    struct io_tcp_server *server;
+    int ret;
+
+    assert(conn->state == IO_TCP_SERVER_CONN_STATE_SSL_ACCEPTING);
+    assert(conn->uses_ssl);
+
+    server = conn->server;
+
+    ret = SSL_accept(conn->ssl);
+    if (ret != 1) {
+        int err;
+
+        err = SSL_get_error(conn->ssl, ret);
+
+        switch (err) {
+        case SSL_ERROR_WANT_READ:
+            if (io_base_watch_fd(server->base, conn->sock, IO_EVENT_FD_READ,
+                                 io_tcp_server_conn_on_event_ssl_accepting,
+                                 conn) == -1) {
+                c_set_error("cannot watch socket: %s", c_get_error());
+                return -1;
+            }
+            break;
+
+        case SSL_ERROR_WANT_WRITE:
+            if (io_base_watch_fd(server->base, conn->sock, IO_EVENT_FD_WRITE,
+                                 io_tcp_server_conn_on_event_ssl_accepting,
+                                 conn) == -1) {
+                c_set_error("cannot watch socket: %s", c_get_error());
+                return -1;
+            }
+            break;
+
+        default:
+            c_set_error("cannot accept ssl connection: %s",
+                        io_ssl_get_error());
+            return -1;
+        }
+
+        return 0;
+    }
+
+    conn->state = IO_TCP_SERVER_CONN_STATE_CONNECTED;
+    return 0;
 }
 
 void
@@ -105,13 +156,21 @@ io_tcp_server_conn_close(struct io_tcp_server_conn *conn) {
     if (conn->state == IO_TCP_SERVER_CONN_STATE_DISCONNECTED)
         return;
 
-    if (io_base_unwatch_fd(conn->server->base, conn->sock) == -1) {
-        io_tcp_server_conn_signal_error(conn, "cannot unwatch socket: %s",
-                              c_get_error());
+    if (io_base_is_fd_watched(conn->server->base, conn->sock)) {
+        if (io_base_unwatch_fd(conn->server->base, conn->sock) == -1) {
+            io_tcp_server_conn_signal_error(conn, "cannot unwatch socket: %s",
+                                  c_get_error());
+        }
     }
 
     close(conn->sock);
     conn->sock = -1;
+
+    if (conn->uses_ssl) {
+        io_ssl_delete(conn->ssl);
+        conn->ssl = NULL;
+        conn->ssl_last_write_sz = 0;
+    }
 
     conn->state = IO_TCP_SERVER_CONN_STATE_DISCONNECTED;
 }
@@ -173,6 +232,25 @@ io_tcp_server_conn_signal_error(struct io_tcp_server_conn *conn,
 }
 
 static void
+io_tcp_server_conn_on_event_ssl_accepting(int sock, uint32_t events,
+                                          void *arg) {
+    struct io_tcp_server_conn *conn;
+
+    conn = arg;
+
+    assert(conn->state == IO_TCP_SERVER_CONN_STATE_SSL_ACCEPTING);
+
+    if (io_tcp_server_conn_ssl_accept(conn) == -1) {
+        io_tcp_server_conn_signal_error(conn, "%s", c_get_error());
+        io_tcp_server_conn_close_discard(conn);
+        return;
+    }
+
+    if (conn->state == IO_TCP_SERVER_CONN_STATE_CONNECTED)
+        io_tcp_server_conn_on_connected(conn);
+}
+
+static void
 io_tcp_server_conn_on_event(int sock, uint32_t events, void *arg) {
     struct io_tcp_server_conn *conn;
 
@@ -184,7 +262,12 @@ io_tcp_server_conn_on_event(int sock, uint32_t events, void *arg) {
     if (events & IO_EVENT_FD_READ) {
         ssize_t ret;
 
-        ret = c_buffer_read(conn->rbuf, conn->sock, BUFSIZ);
+        if (conn->uses_ssl) {
+            ret = io_ssl_read(conn->ssl, conn->rbuf, BUFSIZ);
+        } else {
+            ret = c_buffer_read(conn->rbuf, conn->sock, BUFSIZ);
+        }
+
         if (ret == -1) {
             io_tcp_server_conn_signal_error(conn, "cannot read socket: %s",
                                             c_get_error());
@@ -196,14 +279,22 @@ io_tcp_server_conn_on_event(int sock, uint32_t events, void *arg) {
         }
 
         io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_DATA_READ);
-        if (conn->state == IO_TCP_SERVER_EVENT_CONN_CLOSED) {
+        if (conn->state == IO_TCP_SERVER_CONN_STATE_DISCONNECTED) {
             io_tcp_server_conn_discard(conn);
             return;
         }
     }
 
     if (events & IO_EVENT_FD_WRITE) {
-        if (c_buffer_write(conn->wbuf, conn->sock) == -1) {
+        ssize_t ret;
+
+        if (conn->uses_ssl) {
+            ret = io_ssl_write(conn->ssl, conn->wbuf, &conn->ssl_last_write_sz);
+        } else {
+            ret = c_buffer_write(conn->wbuf, conn->sock);
+        }
+
+        if (ret == -1) {
             io_tcp_server_conn_signal_error(conn, "cannot write socket: %s",
                                             strerror(errno));
             io_tcp_server_conn_close_discard(conn);
@@ -267,6 +358,22 @@ io_tcp_server_delete(struct io_tcp_server *server) {
     c_queue_delete(server->connections);
 
     c_free0(server, sizeof(struct io_tcp_server));
+}
+
+int
+io_tcp_server_enable_ssl(struct io_tcp_server *server,
+                         const struct io_ssl_cfg *cfg) {
+    SSL_CTX *ctx;
+
+    assert(!server->uses_ssl);
+
+    ctx = io_ssl_ctx_new_server(cfg);
+    if (!ctx)
+        return -1;
+
+    server->uses_ssl = true;
+    server->ssl_ctx = ctx;
+    return 0;
 }
 
 int
@@ -416,6 +523,11 @@ io_tcp_server_close(struct io_tcp_server *server) {
 
     c_queue_clear(server->connections);
 
+    if (server->uses_ssl) {
+        io_ssl_ctx_delete(server->ssl_ctx);
+        server->ssl_ctx = NULL;
+    }
+
     server->state = IO_TCP_SERVER_STATE_STOPPED;
 }
 
@@ -461,6 +573,21 @@ io_tcp_server_signal_error(struct io_tcp_server *server, const char *fmt, ...) {
 }
 
 static void
+io_tcp_server_conn_on_connected(struct io_tcp_server_conn *conn) {
+    if (io_tcp_server_conn_watch(conn, IO_EVENT_FD_READ) == -1) {
+        io_tcp_server_conn_signal_error(conn, "%s", c_get_error());
+        io_tcp_server_conn_close_discard(conn);
+        return;
+    }
+
+    io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_CONN_ACCEPTED);
+    if (conn->state == IO_TCP_SERVER_CONN_STATE_DISCONNECTED) {
+        io_tcp_server_conn_discard(conn);
+        return;
+    }
+}
+
+static void
 io_tcp_server_on_event(int sock, uint32_t events, void *arg) {
     struct io_tcp_server *server;
     struct io_tcp_server_conn *conn;
@@ -486,27 +613,37 @@ io_tcp_server_on_event(int sock, uint32_t events, void *arg) {
         io_tcp_server_signal_error(server,
                                    "cannot initialize connection address: %s",
                                    c_get_error());
-        close(sock);
+        close(csock);
+        return;
     }
 
     conn = io_tcp_server_conn_new(server, csock);
     conn->addr = addr;
 
-    if (io_tcp_server_conn_watch(conn, IO_EVENT_FD_READ) == -1) {
-        io_tcp_server_conn_signal_error(conn, "%s", c_get_error());
-
-        io_tcp_server_conn_close(conn);
-        io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_CONN_CLOSED);
-
-        io_tcp_server_conn_delete(conn);
-        return;
-    }
-
     io_tcp_server_add_conn(server, conn);
 
-    io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_CONN_ACCEPTED);
-    if (conn->state == IO_TCP_SERVER_EVENT_CONN_CLOSED) {
-        io_tcp_server_conn_discard(conn);
-        return;
+    if (server->uses_ssl) {
+        conn->uses_ssl = true;
+
+        conn->state = IO_TCP_SERVER_CONN_STATE_SSL_ACCEPTING;
+
+        conn->ssl = io_ssl_new(server->ssl_ctx, conn->sock);
+        if (!conn->ssl) {
+            io_tcp_server_conn_signal_error(conn, "%s", c_get_error());
+            io_tcp_server_conn_close_discard(conn);
+            return;
+        }
+
+        if (io_tcp_server_conn_ssl_accept(conn) == -1) {
+            io_tcp_server_conn_signal_error(conn, "%s", c_get_error());
+            io_tcp_server_conn_close_discard(conn);
+            return;
+        }
+
+        if (conn->state == IO_TCP_SERVER_CONN_STATE_CONNECTED)
+            io_tcp_server_conn_on_connected(conn);
+    } else {
+        conn->state = IO_TCP_SERVER_CONN_STATE_CONNECTED;
+        io_tcp_server_conn_on_connected(conn);
     }
 }

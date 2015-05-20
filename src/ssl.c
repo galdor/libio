@@ -80,6 +80,36 @@ io_ssl_get_error(void) {
     return io_ssl_error_buf;
 }
 
+DH *
+io_ssl_dh_new(const char *path) {
+    BIO *bio;
+    DH *dh;
+
+    bio = BIO_new_file(path, "r");
+    if (!bio) {
+        c_set_error("cannot open file: %s", io_ssl_get_error());
+        return NULL;
+    }
+
+    dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+    if (!dh) {
+        c_set_error("cannot read dh parameters: %s", io_ssl_get_error());
+        BIO_free(bio);
+        return NULL;
+    }
+
+    BIO_free(bio);
+    return dh;
+}
+
+void
+io_ssl_dh_delete(DH *dh) {
+    if (!dh)
+        return;
+
+    DH_free(dh);
+}
+
 SSL_CTX *
 io_ssl_ctx_new_client(const struct io_ssl_cfg *cfg) {
     const char *ciphers;
@@ -115,12 +145,106 @@ io_ssl_ctx_new_client(const struct io_ssl_cfg *cfg) {
     SSL_CTX_set_verify(ctx, verify_mode, NULL);
     SSL_CTX_set_verify_depth(ctx, 9);
 
+    if (!cfg->ca_cert_path) {
+        c_set_error("missing ca certificate");
+        goto error;
+    }
+    if (SSL_CTX_load_verify_locations(ctx, cfg->ca_cert_path, NULL) != 1) {
+        c_set_error("cannot load ca certificate from %s: %s",
+                    cfg->ca_cert_path, io_ssl_get_error());
+        goto error;
+    }
+
+    return ctx;
+
+error:
+    SSL_CTX_free(ctx);
+    return NULL;
+}
+
+SSL_CTX *
+io_ssl_ctx_new_server(const struct io_ssl_cfg *cfg) {
+    const char *ciphers;
+    long options, mode;
+    int verify_mode;
+    SSL_CTX *ctx;
+
+    ctx = SSL_CTX_new(TLSv1_server_method());
+    if (!ctx) {
+        c_set_error("cannot create context: %s", io_ssl_get_error());
+        return NULL;
+    }
+
+    options = SSL_OP_ALL /* all bug workarounds */
+            | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3
+            | SSL_OP_CIPHER_SERVER_PREFERENCE;
+    SSL_CTX_set_options(ctx, options);
+
+    mode = SSL_MODE_ENABLE_PARTIAL_WRITE
+         | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER;
+    SSL_CTX_set_mode(ctx, mode);
+
+    ciphers = cfg->ciphers;
+    if (!ciphers)
+        ciphers = "HIGH:@STRENGTH";
+    if (SSL_CTX_set_cipher_list(ctx, ciphers) == 0) {
+        c_set_error("cannot set ciphers: %s", io_ssl_get_error());
+        goto error;
+    }
+
+    verify_mode = SSL_VERIFY_PEER;
+
+    SSL_CTX_set_verify(ctx, verify_mode, NULL);
+    SSL_CTX_set_verify_depth(ctx, 9);
+
     if (cfg->ca_cert_path) {
         if (SSL_CTX_load_verify_locations(ctx, cfg->ca_cert_path, NULL) != 1) {
             c_set_error("cannot load ca certificate from %s: %s",
                         cfg->ca_cert_path, io_ssl_get_error());
             goto error;
         }
+    }
+
+    if (!cfg->cert_path) {
+        c_set_error("missing certificate");
+        goto error;
+    }
+    if (SSL_CTX_use_certificate_file(ctx, cfg->cert_path,
+                                     SSL_FILETYPE_PEM) != 1) {
+        c_set_error("cannot load certificate from %s: %s",
+                    cfg->cert_path, io_ssl_get_error());
+        goto error;
+    }
+
+    if (!cfg->key_path) {
+        c_set_error("missing private key");
+        goto error;
+    }
+    if (SSL_CTX_use_PrivateKey_file(ctx, cfg->key_path,
+                                    SSL_FILETYPE_PEM) != 1) {
+        c_set_error("cannot load private key from %s: %s",
+                    cfg->key_path, io_ssl_get_error());
+        goto error;
+    }
+
+    if (cfg->dh_path) {
+        DH *dh;
+
+        dh = io_ssl_dh_new(cfg->dh_path);
+        if (!dh) {
+            c_set_error("cannot load dh parameters from %s: %s",
+                        cfg->dh_path, c_get_error());
+            goto error;
+        }
+
+        if (SSL_CTX_set_tmp_dh(ctx, dh) != 1) {
+            c_set_error("cannot use dh parameters from %s: %s",
+                        cfg->dh_path, io_ssl_get_error());
+            DH_free(dh);
+            goto error;
+        }
+
+        io_ssl_dh_delete(dh);
     }
 
     return ctx;

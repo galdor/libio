@@ -43,8 +43,16 @@ main(int argc, char **argv) {
     struct c_command_line *cmdline;
     const char *host, *port_string;
     uint16_t port;
+    bool use_ssl;
+    const char *cert_path, *key_path;
 
     cmdline = c_command_line_new();
+
+    c_command_line_add_flag(cmdline, "s", "ssl", "use ssl");
+    c_command_line_add_option(cmdline, NULL, "cert", "the ssl certificate",
+                              "path", NULL);
+    c_command_line_add_option(cmdline, NULL, "key", "the ssl private key",
+                              "path", NULL);
 
     c_command_line_add_argument(cmdline, "the host to bind to", "host");
     c_command_line_add_argument(cmdline, "the port to listen on", "port");
@@ -58,6 +66,15 @@ main(int argc, char **argv) {
     if (c_parse_u16(port_string, &port, NULL) == -1)
         ioex_die("invalid port number: %s", c_get_error());
 
+    use_ssl = c_command_line_is_option_set(cmdline, "ssl");
+    if (use_ssl) {
+        cert_path = c_command_line_option_value(cmdline, "cert");
+        key_path = c_command_line_option_value(cmdline, "key");
+    }
+
+    if (use_ssl)
+        io_ssl_initialize();
+
     ioex.base = io_base_new();
 
     if (io_base_watch_signal(ioex.base, SIGINT, ioex_on_signal, NULL) == -1)
@@ -66,6 +83,18 @@ main(int argc, char **argv) {
         ioex_die("cannot watch signal: %s", c_get_error());
 
     ioex.server = io_tcp_server_new(ioex.base, ioex_on_server_event, NULL);
+
+    if (use_ssl) {
+        struct io_ssl_cfg cfg;
+
+        memset(&cfg, 0, sizeof(struct io_ssl_cfg));
+        cfg.cert_path = cert_path;
+        cfg.key_path = key_path;
+
+        if (io_tcp_server_enable_ssl(ioex.server, &cfg) == -1)
+            ioex_die("cannot enable ssl: %s", c_get_error());
+    }
+
     if (io_tcp_server_listen(ioex.server, host, port) == -1)
         ioex_die("cannot listen: %s", c_get_error());
 
@@ -76,6 +105,9 @@ main(int argc, char **argv) {
 
     io_tcp_server_delete(ioex.server);
     io_base_delete(ioex.base);
+
+    if (use_ssl)
+        io_ssl_shutdown();
 
     c_command_line_delete(cmdline);
     return 0;
