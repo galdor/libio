@@ -348,8 +348,8 @@ io_tcp_client_on_event_connecting(int sock, uint32_t events, void *arg) {
 
     if (error != 0) {
         io_tcp_client_signal_error(client, "cannot connect socket to %s: %s",
-                             io_address_host_port_string(&client->addr),
-                             strerror(error));
+                                   io_address_host_port_string(&client->addr),
+                                   strerror(error));
 
         io_tcp_client_close(client);
         io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_FAILED);
