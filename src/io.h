@@ -199,6 +199,10 @@ int io_tcp_server_listen(struct io_tcp_server *, const char *, uint16_t);
 void io_tcp_server_stop(struct io_tcp_server *);
 void io_tcp_server_close(struct io_tcp_server *);
 
+/* Server connection */
+void io_tcp_server_conn_set_private_data(struct io_tcp_server_conn *, void *);
+void *io_tcp_server_conn_private_data(const struct io_tcp_server_conn *);
+
 void io_tcp_server_conn_disconnect(struct io_tcp_server_conn *);
 void io_tcp_server_conn_close(struct io_tcp_server_conn *);
 struct c_buffer *io_tcp_server_conn_rbuf(const struct io_tcp_server_conn *);

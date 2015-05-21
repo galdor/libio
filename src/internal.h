@@ -225,6 +225,8 @@ struct io_tcp_server_conn {
 
     struct io_tcp_server *server;
     struct c_queue_entry *queue_entry;
+
+    void *private_data;
 };
 
 struct io_tcp_server_conn *

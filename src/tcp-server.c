@@ -193,6 +193,17 @@ io_tcp_server_conn_rbuf(const struct io_tcp_server_conn *conn) {
     return conn->rbuf;
 }
 
+void
+io_tcp_server_conn_set_private_data(struct io_tcp_server_conn *conn,
+                                    void *data) {
+    conn->private_data = data;
+}
+
+void *
+io_tcp_server_conn_private_data(const struct io_tcp_server_conn *conn) {
+    return conn->private_data;
+}
+
 static int
 io_tcp_server_conn_watch(struct io_tcp_server_conn *conn, uint32_t events) {
     if (io_base_watch_fd(conn->server->base, conn->sock, events,
