@@ -81,6 +81,11 @@ io_tcp_client_enable_ssl(struct io_tcp_client *client,
     return 0;
 }
 
+bool
+io_tcp_client_is_connected(const struct io_tcp_client *client) {
+    return client->state == IO_TCP_CLIENT_STATE_CONNECTED;
+}
+
 struct c_buffer *
 io_tcp_client_rbuf(const struct io_tcp_client *client) {
     return client->rbuf;

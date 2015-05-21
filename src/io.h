@@ -163,6 +163,7 @@ void io_tcp_client_delete(struct io_tcp_client *);
 
 int io_tcp_client_enable_ssl(struct io_tcp_client *, const struct io_ssl_cfg *);
 
+bool io_tcp_client_is_connected(const struct io_tcp_client *);
 struct c_buffer *io_tcp_client_rbuf(const struct io_tcp_client *);
 
 int io_tcp_client_connect(struct io_tcp_client *, const char *, uint16_t);
