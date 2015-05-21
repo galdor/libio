@@ -188,6 +188,11 @@ io_tcp_server_conn_write(struct io_tcp_server_conn *conn,
     return io_tcp_server_conn_watch(conn, IO_EVENT_FD_READ | IO_EVENT_FD_WRITE);
 }
 
+const struct io_address *
+io_tcp_server_conn_address(const struct io_tcp_server_conn *conn) {
+    return &conn->addr;
+}
+
 struct c_buffer *
 io_tcp_server_conn_rbuf(const struct io_tcp_server_conn *conn) {
     return conn->rbuf;
