@@ -17,9 +17,9 @@
 
 #ifdef IO_PLATFORM_FREEBSD
 
-#include <sys/event.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/event.h>
 
 #include "internal.h"
 
@@ -88,7 +88,7 @@ io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
     }
 
     if (kevent(base->fd, events, nb_events, NULL, 0, NULL) == -1) {
-        c_set_error("cannot add fd filter from kqueue: %s",
+        c_set_error("cannot add fd filter to kqueue: %s",
                     strerror(errno));
         return -1;
     }
@@ -237,6 +237,35 @@ io_base_disable_timer_backend(struct io_base *base,
 
     if (kevent(base->fd, &event, 1, NULL, 0, NULL) == -1) {
         c_set_error("cannot remove timer filter from kqueue: %s",
+                    strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+int
+io_base_update_timer_backend(struct io_base *base, struct io_watcher *watcher) {
+    struct kevent event[2];
+
+    assert(watcher->type == IO_WATCHER_TIMER);
+
+    memset(&event, 0, sizeof(event));
+
+    event[0].ident = (uintptr_t)watcher->u.timer.id;
+    event[0].filter = EVFILT_TIMER;
+    event[0].flags = EV_DELETE;
+
+    event[1].ident = (uintptr_t)watcher->u.timer.id;
+    event[1].filter = EVFILT_TIMER;
+    event[1].flags = EV_ADD;
+    if (!(watcher->u.timer.flags & IO_TIMER_RECURRENT))
+        event[1].flags |= EV_ONESHOT;
+    event[1].data = (intptr_t)watcher->u.timer.duration;
+    event[1].udata = watcher;
+
+    if (kevent(base->fd, event, 2, NULL, 0, NULL) == -1) {
+        c_set_error("cannot update timer filter in kqueue: %s",
                     strerror(errno));
         return -1;
     }

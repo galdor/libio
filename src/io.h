@@ -118,6 +118,7 @@ int io_base_unblock_sigchld(struct io_base *);
 int io_base_add_timer(struct io_base *, uint64_t, uint32_t,
                       io_timer_cb, void *);
 int io_base_remove_timer(struct io_base *, int);
+int io_base_update_timer(struct io_base *, int, uint64_t);
 
 int io_base_watch_child(struct io_base *, pid_t, io_child_cb, void *);
 int io_base_unwatch_child(struct io_base *, pid_t);

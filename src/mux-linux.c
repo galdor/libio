@@ -253,6 +253,36 @@ io_base_disable_timer_backend(struct io_base *base, struct io_watcher *watcher) 
 }
 
 int
+io_base_update_timer_backend(struct io_base *base, struct io_watcher *watcher) {
+    struct itimerspec its;
+    uint64_t duration;
+    int fd;
+
+    assert(watcher->type == IO_WATCHER_TIMER);
+
+    fd = watcher->u.timer.fd;
+    duration = watcher->u.timer.duration;
+
+    memset(&its, 0, sizeof(struct itimerspec));
+
+    its.it_value.tv_sec = (time_t)(duration / 1000);
+    its.it_value.tv_nsec = (long)((duration % 1000) * 1000000);
+
+    if (watcher->u.timer.flags & IO_TIMER_RECURRENT) {
+        its.it_interval.tv_sec = its.it_value.tv_sec;
+        its.it_interval.tv_nsec = its.it_value.tv_nsec;
+    }
+
+    if (timerfd_settime(watcher->u.timer.fd, 0, &its, NULL) == -1) {
+        c_set_error("cannot arm timer fd: %s", strerror(errno));
+        close(fd);
+        return -1;
+    }
+
+    return 0;
+}
+
+int
 io_base_read_events_backend(struct io_base *base) {
     struct io_watcher *watcher;
     struct epoll_event event;

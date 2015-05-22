@@ -80,7 +80,16 @@ ioex_on_timer1(int id, uint64_t duration, void *arg) {
 
     printf("timer 1: %"PRIu64"ms\n", duration);
 
-    if (++count >= 3) {
+    count++;
+
+    if (count == 2) {
+        if (io_base_update_timer(ioex.base, ioex.timer1, 2000) == -1)
+            ioex_die("cannot update timer 1: %s", c_get_error());
+        if (io_base_update_timer(ioex.base, ioex.timer2, 5000) == -1)
+            ioex_die("cannot update timer 2: %s", c_get_error());
+    }
+
+    if (count >= 5) {
         if (io_base_remove_timer(ioex.base, ioex.timer1) == -1)
             ioex_die("cannot remove timer 1: %s", c_get_error());
     }

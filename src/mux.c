@@ -515,7 +515,7 @@ io_base_remove_timer(struct io_base *base, int id) {
 
     watcher = io_watcher_array_get(&base->timer_watchers, id);
     if (!watcher) {
-        c_set_error("no watcher found");
+        c_set_error("unknown timer");
         return -1;
     }
 
@@ -529,6 +529,28 @@ io_base_remove_timer(struct io_base *base, int id) {
 
         io_watcher_delete(watcher);
     }
+    return 0;
+}
+
+int
+io_base_update_timer(struct io_base *base, int id, uint64_t duration) {
+    struct io_watcher *watcher;
+    uint64_t old_duration;
+
+    watcher = io_watcher_array_get(&base->timer_watchers, id);
+    if (!watcher) {
+        c_set_error("unknown timer");
+        return -1;
+    }
+
+    old_duration = watcher->u.timer.duration;
+    watcher->u.timer.duration = duration;
+
+    if (io_base_update_timer_backend(base, watcher) == -1) {
+        watcher->u.timer.duration = old_duration;
+        return -1;
+    }
+
     return 0;
 }
 

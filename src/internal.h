@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include <net/if.h>
+#include <netinet/in.h>
 #include <netdb.h>
 #include <unistd.h>
 
@@ -146,6 +147,7 @@ int io_base_disable_signal_backend(struct io_base *, struct io_watcher *);
 
 int io_base_enable_timer_backend(struct io_base *, struct io_watcher *);
 int io_base_disable_timer_backend(struct io_base *, struct io_watcher *);
+int io_base_update_timer_backend(struct io_base *, struct io_watcher *);
 
 int io_base_read_events_backend(struct io_base *);
 
