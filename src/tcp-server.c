@@ -185,6 +185,11 @@ io_tcp_server_conn_write(struct io_tcp_server_conn *conn,
 
     c_buffer_add(conn->wbuf, data, sz);
 
+    return io_tcp_server_conn_signal_data_written(conn);
+}
+
+int
+io_tcp_server_conn_signal_data_written(struct io_tcp_server_conn *conn) {
     return io_tcp_server_conn_watch(conn, IO_EVENT_FD_READ | IO_EVENT_FD_WRITE);
 }
 
@@ -196,6 +201,11 @@ io_tcp_server_conn_address(const struct io_tcp_server_conn *conn) {
 struct c_buffer *
 io_tcp_server_conn_rbuf(const struct io_tcp_server_conn *conn) {
     return conn->rbuf;
+}
+
+struct c_buffer *
+io_tcp_server_conn_wbuf(const struct io_tcp_server_conn *conn) {
+    return conn->wbuf;
 }
 
 void

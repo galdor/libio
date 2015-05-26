@@ -205,6 +205,7 @@ void io_tcp_server_close(struct io_tcp_server *);
 const struct io_address *
 io_tcp_server_conn_address(const struct io_tcp_server_conn *);
 struct c_buffer *io_tcp_server_conn_rbuf(const struct io_tcp_server_conn *);
+struct c_buffer *io_tcp_server_conn_wbuf(const struct io_tcp_server_conn *);
 
 void io_tcp_server_conn_set_private_data(struct io_tcp_server_conn *, void *);
 void *io_tcp_server_conn_private_data(const struct io_tcp_server_conn *);
@@ -213,5 +214,6 @@ void io_tcp_server_conn_disconnect(struct io_tcp_server_conn *);
 void io_tcp_server_conn_close(struct io_tcp_server_conn *);
 
 int io_tcp_server_conn_write(struct io_tcp_server_conn *, const void *, size_t);
+int io_tcp_server_conn_signal_data_written(struct io_tcp_server_conn *);
 
 #endif
