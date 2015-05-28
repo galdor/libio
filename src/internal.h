@@ -247,14 +247,18 @@ enum io_tcp_server_state {
     IO_TCP_SERVER_STATE_STOPPING,
 };
 
+struct io_tcp_listener {
+    struct io_address address;
+    int sock;
+};
+
 struct io_tcp_server {
     enum io_tcp_server_state state;
 
     char *host;
     uint16_t port;
 
-    int *socks;
-    size_t nb_socks;
+    struct c_vector *listeners;
 
     struct c_queue *connections;
 

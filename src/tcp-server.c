@@ -343,6 +343,14 @@ io_tcp_server_conn_on_event(int sock, uint32_t events, void *arg) {
 }
 
 /* ------------------------------------------------------------------------
+ *  Listener
+ * ------------------------------------------------------------------------ */
+const struct io_address *
+io_tcp_listener_address(const struct io_tcp_listener *listener) {
+    return &listener->address;
+}
+
+/* ------------------------------------------------------------------------
  *  Server
  * ------------------------------------------------------------------------ */
 static void io_tcp_server_signal_event(struct io_tcp_server *,
@@ -379,11 +387,31 @@ io_tcp_server_delete(struct io_tcp_server *server) {
 
     c_free(server->host);
 
-    c_free(server->socks);
+    c_vector_delete(server->listeners);
 
     c_queue_delete(server->connections);
 
     c_free0(server, sizeof(struct io_tcp_server));
+}
+
+const char *
+io_tcp_server_host(const struct io_tcp_server *server) {
+    return server->host;
+}
+
+uint16_t
+io_tcp_server_port(const struct io_tcp_server *server) {
+    return server->port;
+}
+
+size_t
+io_tcp_server_nb_listeners(const struct io_tcp_server *server) {
+    return c_vector_length(server->listeners);
+}
+
+const struct io_tcp_listener *
+io_tcp_server_nth_listener(const struct io_tcp_server *server, size_t idx) {
+    return c_vector_entry(server->listeners, idx);
 }
 
 int
@@ -405,6 +433,7 @@ io_tcp_server_enable_ssl(struct io_tcp_server *server,
 int
 io_tcp_server_listen(struct io_tcp_server *server,
                      const char *host, uint16_t port) {
+    struct c_vector *listeners;
     struct io_address *addrs;
     size_t nb_addrs;
     int *socks;
@@ -417,9 +446,12 @@ io_tcp_server_listen(struct io_tcp_server *server,
         return -1;
     }
 
+    listeners = c_vector_new(sizeof(struct io_tcp_listener));
+
     socks = c_calloc(nb_addrs, sizeof(int));
 
     for (size_t i = 0; i < nb_addrs; i++) {
+        struct io_tcp_listener listener;
         struct io_address *addr;
         int sock, opt;
 
@@ -459,15 +491,16 @@ io_tcp_server_listen(struct io_tcp_server *server,
             goto error;
         }
 
-        socks[i] = sock;
+        listener.address = *addr;
+        listener.sock = sock;
+
+        c_vector_append(listeners, &listener);
     }
 
-    c_free(server->host);
     server->host = c_strdup(host);
     server->port = port;
 
-    server->nb_socks = nb_addrs;
-    server->socks = socks;
+    server->listeners = listeners;
 
     server->state = IO_TCP_SERVER_STATE_LISTENING;
 
@@ -477,7 +510,7 @@ io_tcp_server_listen(struct io_tcp_server *server,
     return 0;
 
 error:
-    c_free(socks);
+    c_vector_delete(listeners);
     c_free(addrs);
     return -1;
 }
@@ -488,12 +521,12 @@ io_tcp_server_stop(struct io_tcp_server *server) {
 
     assert(server->state == IO_TCP_SERVER_STATE_LISTENING);
 
-    for (size_t i = 0; i < server->nb_socks; i++) {
-        int sock;
+    for (size_t i = 0; i < c_vector_length(server->listeners); i++) {
+        struct io_tcp_listener *listener;
 
-        sock = server->socks[i];
+        listener = c_vector_entry(server->listeners, i);
 
-        if (io_base_unwatch_fd(server->base, sock) == -1) {
+        if (io_base_unwatch_fd(server->base, listener->sock) == -1) {
             io_tcp_server_signal_error(server, "cannot unwatch socket: %s",
                                        c_get_error());
         }
@@ -530,9 +563,13 @@ io_tcp_server_close(struct io_tcp_server *server) {
     if (server->state == IO_TCP_SERVER_STATE_STOPPED)
         return;
 
-    for (size_t i = 0; i < server->nb_socks; i++) {
-        close(server->socks[i]);
-        server->socks[i] = -1;
+    for (size_t i = 0; i < c_vector_length(server->listeners); i++) {
+        struct io_tcp_listener *listener;
+
+        listener = c_vector_entry(server->listeners, i);
+
+        close(listener->sock);
+        listener->sock = -1;
     }
 
     entry = c_queue_first_entry(server->connections);

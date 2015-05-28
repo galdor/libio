@@ -184,6 +184,7 @@ enum io_tcp_server_event {
     IO_TCP_SERVER_EVENT_DATA_READ,
 };
 
+struct io_tcp_listener;
 struct io_tcp_server;
 struct io_tcp_server_conn;
 
@@ -195,11 +196,22 @@ struct io_tcp_server *io_tcp_server_new(struct io_base *,
                                         io_tcp_server_event_cb, void *);
 void io_tcp_server_delete(struct io_tcp_server *);
 
+const char *io_tcp_server_host(const struct io_tcp_server *);
+uint16_t io_tcp_server_port(const struct io_tcp_server *);
+
+size_t io_tcp_server_nb_listeners(const struct io_tcp_server *);
+const struct io_tcp_listener *
+io_tcp_server_nth_listener(const struct io_tcp_server *, size_t);
+
 int io_tcp_server_enable_ssl(struct io_tcp_server *, const struct io_ssl_cfg *);
 
 int io_tcp_server_listen(struct io_tcp_server *, const char *, uint16_t);
 void io_tcp_server_stop(struct io_tcp_server *);
 void io_tcp_server_close(struct io_tcp_server *);
+
+/* Server listener */
+const struct io_address *
+io_tcp_listener_address(const struct io_tcp_listener *);
 
 /* Server connection */
 const struct io_address *

@@ -143,6 +143,7 @@ static void
 ioex_on_server_event(struct io_tcp_server *server,
                      struct io_tcp_server_conn *conn,
                      enum io_tcp_server_event event, void *arg) {
+    size_t nb_listeners;
     struct c_buffer *rbuf;
     const char *string;
 
@@ -151,7 +152,18 @@ ioex_on_server_event(struct io_tcp_server *server,
 
     switch (event) {
     case IO_TCP_SERVER_EVENT_SERVER_LISTENING:
-        printf("server listening\n");
+        nb_listeners = io_tcp_server_nb_listeners(server);
+
+        for (size_t i = 0; i < nb_listeners; i++) {
+            const struct io_tcp_listener *listener;
+            const struct io_address *address;
+
+            listener = io_tcp_server_nth_listener(server, i);
+            address = io_tcp_listener_address(listener);
+
+            printf("server listening on %s\n",
+                   io_address_host_port_string(address));
+        }
         break;
 
     case IO_TCP_SERVER_EVENT_SERVER_STOPPED:
