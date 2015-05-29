@@ -436,7 +436,6 @@ io_tcp_server_listen(struct io_tcp_server *server,
     struct c_vector *listeners;
     struct io_address *addrs;
     size_t nb_addrs;
-    int *socks;
 
     assert(server->state == IO_TCP_SERVER_STATE_STOPPED);
 
@@ -447,8 +446,6 @@ io_tcp_server_listen(struct io_tcp_server *server,
     }
 
     listeners = c_vector_new(sizeof(struct io_tcp_listener));
-
-    socks = c_calloc(nb_addrs, sizeof(int));
 
     for (size_t i = 0; i < nb_addrs; i++) {
         struct io_tcp_listener listener;
