@@ -91,6 +91,11 @@ io_tcp_client_rbuf(const struct io_tcp_client *client) {
     return client->rbuf;
 }
 
+struct c_buffer *
+io_tcp_client_wbuf(const struct io_tcp_client *client) {
+    return client->wbuf;
+}
+
 int
 io_tcp_client_connect(struct io_tcp_client *client,
                       const char *host, uint16_t port) {
@@ -220,6 +225,11 @@ io_tcp_client_write(struct io_tcp_client *client, const void *data, size_t sz) {
 
     c_buffer_add(client->wbuf, data, sz);
 
+    return io_tcp_client_signal_data_written(client);
+}
+
+int
+io_tcp_client_signal_data_written(struct io_tcp_client *client) {
     return io_tcp_client_watch(client, IO_EVENT_FD_READ | IO_EVENT_FD_WRITE);
 }
 
