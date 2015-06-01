@@ -162,6 +162,9 @@ struct io_tcp_client *io_tcp_client_new(struct io_base *,
                                         io_tcp_client_event_cb, void *);
 void io_tcp_client_delete(struct io_tcp_client *);
 
+const char *io_tcp_client_host(const struct io_tcp_client *);
+uint16_t io_tcp_client_port(const struct io_tcp_client *);
+
 int io_tcp_client_enable_ssl(struct io_tcp_client *, const struct io_ssl_cfg *);
 
 bool io_tcp_client_is_connected(const struct io_tcp_client *);

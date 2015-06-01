@@ -65,6 +65,16 @@ io_tcp_client_delete(struct io_tcp_client *client) {
     c_free0(client, sizeof(struct io_tcp_client));
 }
 
+const char *
+io_tcp_client_host(const struct io_tcp_client *client) {
+    return client->host;
+}
+
+uint16_t
+io_tcp_client_port(const struct io_tcp_client *client) {
+    return client->port;
+}
+
 int
 io_tcp_client_enable_ssl(struct io_tcp_client *client,
                          const struct io_ssl_cfg *cfg) {
