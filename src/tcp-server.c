@@ -130,7 +130,8 @@ io_tcp_server_conn_disconnect(struct io_tcp_server_conn *conn) {
     assert(conn->state == IO_TCP_SERVER_CONN_STATE_CONNECTED);
 
     if (c_buffer_length(conn->wbuf) == 0) {
-        io_tcp_server_conn_close_discard(conn);
+        io_tcp_server_conn_close(conn);
+        io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_CONN_CLOSED);
         return;
     }
 
