@@ -183,10 +183,6 @@ ioex_on_server_event(struct io_tcp_server *server,
         printf("connection closed\n");
         break;
 
-    case IO_TCP_SERVER_EVENT_CONN_LOST:
-        printf("connection lost\n");
-        break;
-
     case IO_TCP_SERVER_EVENT_ERROR:
         printf("error: %s\n", c_get_error());
         break;

@@ -453,7 +453,7 @@ io_tcp_client_on_event(int sock, uint32_t events, void *arg) {
             return;
         } else if (ret == 0) {
             io_tcp_client_close(client);
-            io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_LOST);
+            io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
             return;
         }
 

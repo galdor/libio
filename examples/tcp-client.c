@@ -160,11 +160,6 @@ ioex_on_client_event(struct io_tcp_client *client,
         ioex.do_exit = true;
         break;
 
-    case IO_TCP_CLIENT_EVENT_CONN_LOST:
-        printf("connection lost\n");
-        ioex.do_exit = true;
-        break;
-
     case IO_TCP_CLIENT_EVENT_ERROR:
         printf("error: %s\n", c_get_error());
         break;
