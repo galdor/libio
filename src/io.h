@@ -174,8 +174,8 @@ int io_tcp_client_connect(struct io_tcp_client *, const char *, uint16_t);
 void io_tcp_client_disconnect(struct io_tcp_client *);
 void io_tcp_client_close(struct io_tcp_client *);
 
-int io_tcp_client_write(struct io_tcp_client *, const void *, size_t);
-int io_tcp_client_signal_data_written(struct io_tcp_client *);
+void io_tcp_client_write(struct io_tcp_client *, const void *, size_t);
+void io_tcp_client_signal_data_written(struct io_tcp_client *);
 
 /* Server */
 enum io_tcp_server_event {
@@ -227,7 +227,7 @@ void *io_tcp_server_conn_private_data(const struct io_tcp_server_conn *);
 
 void io_tcp_server_conn_disconnect(struct io_tcp_server_conn *);
 
-int io_tcp_server_conn_write(struct io_tcp_server_conn *, const void *, size_t);
-int io_tcp_server_conn_signal_data_written(struct io_tcp_server_conn *);
+void io_tcp_server_conn_write(struct io_tcp_server_conn *, const void *, size_t);
+void io_tcp_server_conn_signal_data_written(struct io_tcp_server_conn *);
 
 #endif

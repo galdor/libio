@@ -200,6 +200,8 @@ struct io_tcp_client {
     SSL_CTX *ssl_ctx;
     SSL *ssl;
     size_t ssl_last_write_sz;
+
+    bool failing;
 };
 
 int io_tcp_client_ssl_connect(struct io_tcp_client *);
@@ -229,6 +231,8 @@ struct io_tcp_server_conn {
     struct c_queue_entry *queue_entry;
 
     void *private_data;
+
+    bool failing;
 };
 
 struct io_tcp_server_conn *

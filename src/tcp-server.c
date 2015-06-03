@@ -127,7 +127,8 @@ io_tcp_server_conn_close_discard(struct io_tcp_server_conn *conn) {
 
 void
 io_tcp_server_conn_disconnect(struct io_tcp_server_conn *conn) {
-    assert(conn->state == IO_TCP_SERVER_CONN_STATE_CONNECTED);
+    if (conn->state != IO_TCP_SERVER_CONN_STATE_CONNECTED)
+        return;
 
     if (c_buffer_length(conn->wbuf) == 0) {
         io_tcp_server_conn_close(conn);
@@ -176,22 +177,34 @@ io_tcp_server_conn_close(struct io_tcp_server_conn *conn) {
     conn->state = IO_TCP_SERVER_CONN_STATE_DISCONNECTED;
 }
 
-int
+void
 io_tcp_server_conn_write(struct io_tcp_server_conn *conn,
                          const void *data, size_t sz) {
-    assert(conn->state == IO_TCP_SERVER_CONN_STATE_CONNECTED);
+    if (conn->state != IO_TCP_SERVER_CONN_STATE_CONNECTED)
+        return;
 
     if (sz == 0)
-        return 0;
+        return;
 
     c_buffer_add(conn->wbuf, data, sz);
 
-    return io_tcp_server_conn_signal_data_written(conn);
+    io_tcp_server_conn_signal_data_written(conn);
 }
 
-int
+void
 io_tcp_server_conn_signal_data_written(struct io_tcp_server_conn *conn) {
-    return io_tcp_server_conn_watch(conn, IO_EVENT_FD_READ | IO_EVENT_FD_WRITE);
+    uint32_t flags;
+
+    if (conn->state != IO_TCP_SERVER_CONN_STATE_CONNECTED)
+        return;
+
+    flags = IO_EVENT_FD_READ | IO_EVENT_FD_WRITE;
+
+    if (io_tcp_server_conn_watch(conn, flags) == -1) {
+        io_tcp_server_conn_signal_error(conn, "%s", c_get_error());
+
+        conn->failing = true;
+    }
 }
 
 const struct io_address *
@@ -308,6 +321,9 @@ io_tcp_server_conn_on_event(int sock, uint32_t events, void *arg) {
         io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_DATA_READ);
         if (conn->state == IO_TCP_SERVER_CONN_STATE_DISCONNECTED) {
             io_tcp_server_conn_discard(conn);
+            return;
+        } else if (conn->failing) {
+            io_tcp_server_conn_close_discard(conn);
             return;
         }
     }
@@ -644,6 +660,9 @@ io_tcp_server_conn_on_connected(struct io_tcp_server_conn *conn) {
     io_tcp_server_conn_signal_event(conn, IO_TCP_SERVER_EVENT_CONN_ACCEPTED);
     if (conn->state == IO_TCP_SERVER_CONN_STATE_DISCONNECTED) {
         io_tcp_server_conn_discard(conn);
+        return;
+    } else if (conn->failing) {
+        io_tcp_server_conn_close_discard(conn);
         return;
     }
 }

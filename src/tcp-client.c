@@ -226,21 +226,33 @@ io_tcp_client_close(struct io_tcp_client *client) {
     client->state = IO_TCP_CLIENT_STATE_DISCONNECTED;
 }
 
-int
+void
 io_tcp_client_write(struct io_tcp_client *client, const void *data, size_t sz) {
-    assert(client->state == IO_TCP_CLIENT_STATE_CONNECTED);
+    if (client->state != IO_TCP_CLIENT_STATE_CONNECTED)
+        return;
 
     if (sz == 0)
-        return 0;
+        return;
 
     c_buffer_add(client->wbuf, data, sz);
 
-    return io_tcp_client_signal_data_written(client);
+    io_tcp_client_signal_data_written(client);
 }
 
-int
+void
 io_tcp_client_signal_data_written(struct io_tcp_client *client) {
-    return io_tcp_client_watch(client, IO_EVENT_FD_READ | IO_EVENT_FD_WRITE);
+    uint32_t flags;
+
+    if (client->state != IO_TCP_CLIENT_STATE_CONNECTED)
+        return;
+
+    flags = IO_EVENT_FD_READ | IO_EVENT_FD_WRITE;
+
+    if (io_tcp_client_watch(client, flags) == -1) {
+        io_tcp_client_signal_error(client, "%s", c_get_error());
+
+        client->failing = true;
+    }
 }
 
 int
@@ -328,6 +340,12 @@ io_tcp_client_on_conn_established(struct io_tcp_client *client) {
     assert(client->state == IO_TCP_CLIENT_STATE_CONNECTED);
 
     io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_ESTABLISHED);
+    if (client->failing) {
+        io_tcp_client_close(client);
+        io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+    }
+    if (client->state == IO_TCP_CLIENT_EVENT_CONN_CLOSED)
+        return;
 
     /* Watch the socket. Note that the event handler may have written data; in
      * that case, we must watch for write events. */
@@ -458,9 +476,10 @@ io_tcp_client_on_event(int sock, uint32_t events, void *arg) {
         }
 
         io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_DATA_READ);
-
-        /* The event callback may have closed the client; in that case, we
-         * must not try to process any write event. */
+        if (client->failing) {
+            io_tcp_client_close(client);
+            io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+        }
         if (client->state == IO_TCP_CLIENT_EVENT_CONN_CLOSED)
             return;
     }

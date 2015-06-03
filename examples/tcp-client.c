@@ -146,8 +146,7 @@ ioex_on_client_event(struct io_tcp_client *client,
         printf("connection established\n");
 
         string = "hello world\n";
-        if (io_tcp_client_write(client, string, strlen(string)) == -1)
-            ioex_die("cannot write to connection: %s", c_get_error());
+        io_tcp_client_write(client, string, strlen(string));
         break;
 
     case IO_TCP_CLIENT_EVENT_CONN_FAILED:
@@ -169,8 +168,7 @@ ioex_on_client_event(struct io_tcp_client *client,
         c_buffer_clear(rbuf);
 
         string = "bye\n";
-        if (io_tcp_client_write(client, string, strlen(string)) == -1)
-            ioex_die("cannot write to connection: %s", c_get_error());
+        io_tcp_client_write(client, string, strlen(string));
 
         io_tcp_client_disconnect(client);
         break;

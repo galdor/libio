@@ -175,8 +175,7 @@ ioex_on_server_event(struct io_tcp_server *server,
         printf("connection accepted\n");
 
         string = "hello world\n";
-        if (io_tcp_server_conn_write(conn, string, strlen(string)) == -1)
-            ioex_die("cannot write to connection: %s", c_get_error());
+        io_tcp_server_conn_write(conn, string, strlen(string));
         break;
 
     case IO_TCP_SERVER_EVENT_CONN_CLOSED:
@@ -192,8 +191,7 @@ ioex_on_server_event(struct io_tcp_server *server,
         c_buffer_clear(rbuf);
 
         string = "bye\n";
-        if (io_tcp_server_conn_write(conn, string, strlen(string)) == -1)
-            ioex_die("cannot write to connection: %s", c_get_error());
+        io_tcp_server_conn_write(conn, string, strlen(string));
 
         io_tcp_server_conn_disconnect(conn);
         break;
