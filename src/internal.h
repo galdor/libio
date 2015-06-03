@@ -237,6 +237,7 @@ void io_tcp_server_conn_delete(struct io_tcp_server_conn *);
 
 int io_tcp_server_conn_ssl_accept(struct io_tcp_server_conn *);
 
+void io_tcp_server_conn_close(struct io_tcp_server_conn *);
 void io_tcp_server_conn_discard(struct io_tcp_server_conn *);
 void io_tcp_server_conn_close_discard(struct io_tcp_server_conn *);
 
