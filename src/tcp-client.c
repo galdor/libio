@@ -230,6 +230,8 @@ void
 io_tcp_client_write(struct io_tcp_client *client, const void *data, size_t sz) {
     if (client->state != IO_TCP_CLIENT_STATE_CONNECTED)
         return;
+    if (client->failing)
+        return;
 
     if (sz == 0)
         return;
@@ -244,6 +246,8 @@ io_tcp_client_signal_data_written(struct io_tcp_client *client) {
     uint32_t flags;
 
     if (client->state != IO_TCP_CLIENT_STATE_CONNECTED)
+        return;
+    if (client->failing)
         return;
 
     flags = IO_EVENT_FD_READ | IO_EVENT_FD_WRITE;
