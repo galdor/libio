@@ -163,32 +163,16 @@ io_tcp_client_disconnect(struct io_tcp_client *client) {
         || client->state == IO_TCP_CLIENT_STATE_SSL_CONNECTING
         || client->state == IO_TCP_CLIENT_STATE_CONNECTED);
 
-    if (client->state == IO_TCP_CLIENT_STATE_CONNECTING) {
-        io_tcp_client_close(client);
-        io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
-        return;
-    }
-
-    if (c_buffer_length(client->wbuf) == 0) {
-        io_tcp_client_close(client);
-        io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
-        return;
-    }
-
     if (shutdown(client->sock, SHUT_RD) == -1) {
         io_tcp_client_signal_error(client, "cannot shutdown socket: %s",
-                             strerror(errno));
-
-        io_tcp_client_close(client);
-        io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+                                   strerror(errno));
+        client->failing = true;
         return;
     }
 
     if (io_tcp_client_watch(client, IO_EVENT_FD_WRITE) == -1) {
         io_tcp_client_signal_error(client, "%s", c_get_error());
-
-        io_tcp_client_close(client);
-        io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+        client->failing = true;
         return;
     }
 
@@ -491,20 +475,23 @@ io_tcp_client_on_event(int sock, uint32_t events, void *arg) {
     if (events & IO_EVENT_FD_WRITE) {
         ssize_t ret;
 
-        if (client->uses_ssl) {
-            ret = io_ssl_write(client->ssl, client->wbuf,
-                               &client->ssl_last_write_sz);
-        } else {
-            ret = c_buffer_write(client->wbuf, client->sock);
-        }
+        if (c_buffer_length(client->wbuf) > 0) {
+            if (client->uses_ssl) {
+                ret = io_ssl_write(client->ssl, client->wbuf,
+                                   &client->ssl_last_write_sz);
+            } else {
+                ret = c_buffer_write(client->wbuf, client->sock);
+            }
 
-        if (ret == -1) {
-            io_tcp_client_signal_error(client, "cannot write socket: %s",
-                                 strerror(errno));
+            if (ret == -1) {
+                io_tcp_client_signal_error(client, "cannot write socket: %s",
+                                           strerror(errno));
 
-            io_tcp_client_close(client);
-            io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
-            return;
+                io_tcp_client_close(client);
+                io_tcp_client_signal_event(client,
+                                           IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+                return;
+            }
         }
 
         if (c_buffer_length(client->wbuf) == 0) {
