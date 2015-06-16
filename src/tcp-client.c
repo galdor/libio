@@ -159,11 +159,19 @@ io_tcp_client_connect(struct io_tcp_client *client,
 
 void
 io_tcp_client_disconnect(struct io_tcp_client *client) {
+    int mode;
+
     assert(client->state == IO_TCP_CLIENT_STATE_CONNECTING
         || client->state == IO_TCP_CLIENT_STATE_SSL_CONNECTING
         || client->state == IO_TCP_CLIENT_STATE_CONNECTED);
 
-    if (shutdown(client->sock, SHUT_RD) == -1) {
+    if (c_buffer_length(client->wbuf) == 0) {
+        mode = SHUT_RDWR;
+    } else {
+        mode = SHUT_RD;
+    }
+
+    if (shutdown(client->sock, mode) == -1) {
         io_tcp_client_signal_error(client, "cannot shutdown socket: %s",
                                    strerror(errno));
         client->failing = true;
