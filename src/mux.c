@@ -122,7 +122,7 @@ io_watcher_on_events(struct io_watcher *watcher, uint32_t events) {
         }
 
         if (watcher->type == IO_WATCHER_TIMER)
-            io_base_release_timer_id(watcher->base, watcher->u.timer.id);
+            io_base_release_timer_id(watcher->base, id);
 
         io_watcher_delete(watcher);
     }
