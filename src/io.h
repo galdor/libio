@@ -165,6 +165,7 @@ const char *io_tcp_client_host(const struct io_tcp_client *);
 uint16_t io_tcp_client_port(const struct io_tcp_client *);
 
 int io_tcp_client_enable_ssl(struct io_tcp_client *, const struct io_ssl_cfg *);
+bool io_tcp_client_is_ssl_enabled(struct io_tcp_client *);
 
 bool io_tcp_client_is_connected(const struct io_tcp_client *);
 struct c_buffer *io_tcp_client_rbuf(const struct io_tcp_client *);
@@ -207,6 +208,7 @@ const struct io_tcp_listener *
 io_tcp_server_nth_listener(const struct io_tcp_server *, size_t);
 
 int io_tcp_server_enable_ssl(struct io_tcp_server *, const struct io_ssl_cfg *);
+bool io_tcp_server_is_ssl_enabled(struct io_tcp_server *);
 
 int io_tcp_server_listen(struct io_tcp_server *, const char *, uint16_t);
 void io_tcp_server_stop(struct io_tcp_server *);

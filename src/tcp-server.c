@@ -447,6 +447,11 @@ io_tcp_server_enable_ssl(struct io_tcp_server *server,
     return 0;
 }
 
+bool
+io_tcp_server_is_ssl_enabled(struct io_tcp_server *server) {
+    return server->uses_ssl;
+}
+
 int
 io_tcp_server_listen(struct io_tcp_server *server,
                      const char *host, uint16_t port) {
