@@ -145,13 +145,19 @@ io_ssl_ctx_new_client(const struct io_ssl_cfg *cfg) {
     SSL_CTX_set_verify(ctx, verify_mode, NULL);
     SSL_CTX_set_verify_depth(ctx, 9);
 
-    if (!cfg->ca_cert_path) {
-        c_set_error("missing ca certificate");
+    if (!cfg->ca_cert_path && !cfg->ca_cert_directory) {
+        c_set_error("missing ca certificate or ca certificate directory");
         goto error;
     }
-    if (SSL_CTX_load_verify_locations(ctx, cfg->ca_cert_path, NULL) != 1) {
-        c_set_error("cannot load ca certificate from %s: %s",
-                    cfg->ca_cert_path, io_ssl_get_error());
+    if (SSL_CTX_load_verify_locations(ctx, cfg->ca_cert_path,
+                                      cfg->ca_cert_directory) != 1) {
+        if (cfg->ca_cert_path) {
+            c_set_error("cannot load ca certificate from %s: %s",
+                        cfg->ca_cert_path, io_ssl_get_error());
+        } else {
+            c_set_error("cannot set ca certificate directory: %s",
+                        io_ssl_get_error());
+        }
         goto error;
     }
 

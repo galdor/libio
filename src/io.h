@@ -134,6 +134,7 @@ int io_base_read_events(struct io_base *);
 /* SSL */
 struct io_ssl_cfg {
     const char *ca_cert_path;
+    const char *ca_cert_directory;
     const char *cert_path;
     const char *key_path;
     const char *dh_path;
