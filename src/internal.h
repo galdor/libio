@@ -167,7 +167,7 @@ void io_ssl_ctx_delete(SSL_CTX *);
 SSL *io_ssl_new(SSL_CTX *, int);
 void io_ssl_delete(SSL *);
 
-ssize_t io_ssl_read(SSL *, struct c_buffer *, size_t);
+ssize_t io_ssl_read(SSL *, struct c_buffer *, size_t, int *);
 ssize_t io_ssl_write(SSL *, struct c_buffer *, size_t *);
 
 /* Client */

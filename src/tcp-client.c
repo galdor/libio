@@ -459,7 +459,14 @@ io_tcp_client_on_event(int sock, uint32_t events, void *arg) {
         ssize_t ret;
 
         if (client->uses_ssl) {
-            ret = io_ssl_read(client->ssl, client->rbuf, BUFSIZ);
+            int err;
+
+            ret = io_ssl_read(client->ssl, client->rbuf, BUFSIZ, &err);
+
+            if (ret == -1) {
+                if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+                    return;
+            }
         } else {
             ret = c_buffer_read(client->rbuf, client->sock, BUFSIZ);
         }

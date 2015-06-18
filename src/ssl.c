@@ -297,7 +297,7 @@ io_ssl_delete(SSL *ssl) {
 }
 
 ssize_t
-io_ssl_read(SSL *ssl, struct c_buffer *buf, size_t sz) {
+io_ssl_read(SSL *ssl, struct c_buffer *buf, size_t sz, int *perr) {
     void *ptr;
     int ret;
 
@@ -309,6 +309,7 @@ io_ssl_read(SSL *ssl, struct c_buffer *buf, size_t sz) {
         int err;
 
         err = SSL_get_error(ssl, ret);
+        *perr = err;
 
         switch (err) {
         case SSL_ERROR_ZERO_RETURN:
