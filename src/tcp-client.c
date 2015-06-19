@@ -166,10 +166,10 @@ void
 io_tcp_client_disconnect(struct io_tcp_client *client) {
     int mode;
 
-    assert(client->state != IO_TCP_CLIENT_STATE_DISCONNECTED);
-
-    if (client->state == IO_TCP_CLIENT_STATE_DISCONNECTING)
+    if (client->state == IO_TCP_CLIENT_STATE_DISCONNECTING
+     || client->state == IO_TCP_CLIENT_STATE_DISCONNECTED) {
         return;
+    }
 
     if (c_buffer_length(client->wbuf) == 0) {
         mode = SHUT_RDWR;
