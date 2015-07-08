@@ -136,12 +136,17 @@ struct io_ssl_server_cfg {
     const char *cert_path;
     const char *key_path;
     const char *dh_path;
+
     const char *ciphers;
 };
 
 struct io_ssl_client_cfg {
     const char *ca_cert_path;
     const char *ca_cert_directory;
+
+    const char *cert_path;
+    const char *key_path;
+
     const char *ciphers;
 };
 

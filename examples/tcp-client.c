@@ -43,13 +43,17 @@ main(int argc, char **argv) {
     const char *host, *port_string;
     uint16_t port;
     bool use_ssl;
-    const char *ca_cert;
+    const char *ca_cert, *cert, *key;
 
     cmdline = c_command_line_new();
 
     c_command_line_add_flag(cmdline, "s", "ssl", "use ssl");
-    c_command_line_add_option(cmdline, NULL, "ca-cert", "the ssl ca certificate",
-                              "path", NULL);
+    c_command_line_add_option(cmdline, NULL, "ca-cert",
+                              "the ssl ca certificate", "path", NULL);
+    c_command_line_add_option(cmdline, NULL, "cert",
+                              "the ssl client certificate", "path", NULL);
+    c_command_line_add_option(cmdline, NULL, "key",
+                              "the ssl private key", "path", NULL);
 
     c_command_line_add_argument(cmdline, "the host to connect to", "host");
     c_command_line_add_argument(cmdline, "the port to connect to", "port");
@@ -64,8 +68,11 @@ main(int argc, char **argv) {
         ioex_die("invalid port number: %s", c_get_error());
 
     use_ssl = c_command_line_is_option_set(cmdline, "ssl");
-    if (use_ssl)
+    if (use_ssl) {
         ca_cert = c_command_line_option_value(cmdline, "ca-cert");
+        cert = c_command_line_option_value(cmdline, "cert");
+        key = c_command_line_option_value(cmdline, "key");
+    }
 
     if (use_ssl)
         io_ssl_initialize();
@@ -83,7 +90,10 @@ main(int argc, char **argv) {
         struct io_ssl_client_cfg cfg;
 
         memset(&cfg, 0, sizeof(struct io_ssl_client_cfg));
+
         cfg.ca_cert_path = ca_cert;
+        cfg.cert_path = cert;
+        cfg.key_path = key;
 
         if (io_tcp_client_enable_ssl(ioex.client, &cfg) == -1)
             ioex_die("cannot enable ssl: %s", c_get_error());

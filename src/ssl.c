@@ -161,6 +161,29 @@ io_ssl_ctx_new_client(const struct io_ssl_client_cfg *cfg) {
         goto error;
     }
 
+    if (cfg->cert_path && cfg->key_path) {
+        if (SSL_CTX_use_certificate_file(ctx, cfg->cert_path,
+                                         SSL_FILETYPE_PEM) != 1) {
+            c_set_error("cannot load certificate from %s: %s",
+                        cfg->cert_path, io_ssl_get_error());
+            goto error;
+        }
+
+        if (SSL_CTX_use_PrivateKey_file(ctx, cfg->key_path,
+                                        SSL_FILETYPE_PEM) != 1) {
+            c_set_error("cannot load private key from %s: %s",
+                        cfg->key_path, io_ssl_get_error());
+            goto error;
+        }
+    } else if (cfg->cert_path || cfg->key_path) {
+        if (cfg->cert_path) {
+            c_set_error("missing private key");
+        } else {
+            c_set_error("missing certificate");
+        }
+        goto error;
+    }
+
     return ctx;
 
 error:
