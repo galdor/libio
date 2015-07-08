@@ -222,6 +222,8 @@ io_ssl_ctx_new_server(const struct io_ssl_server_cfg *cfg) {
     }
 
     verify_mode = SSL_VERIFY_PEER;
+    if (cfg->ca_certs_path)
+        verify_mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
 
     SSL_CTX_set_verify(ctx, verify_mode, NULL);
     SSL_CTX_set_verify_depth(ctx, 9);
@@ -266,6 +268,25 @@ io_ssl_ctx_new_server(const struct io_ssl_server_cfg *cfg) {
         }
 
         io_ssl_dh_delete(dh);
+    }
+
+    if (cfg->ca_certs_path) {
+        STACK_OF(X509_NAME) *ca_certs;
+
+        if (SSL_CTX_load_verify_locations(ctx, cfg->ca_certs_path, NULL) != 1) {
+            c_set_error("cannot load ca certificates from %s: %s",
+                        cfg->ca_certs_path, io_ssl_get_error());
+            goto error;
+        }
+
+        ca_certs = SSL_load_client_CA_file(cfg->ca_certs_path);
+        if (!ca_certs) {
+            c_set_error("cannot load ca certificates from %s: %s",
+                        cfg->ca_certs_path, io_ssl_get_error());
+            goto error;
+        }
+
+        SSL_CTX_set_client_CA_list(ctx, ca_certs);
     }
 
     return ctx;

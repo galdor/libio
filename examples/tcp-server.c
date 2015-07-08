@@ -44,7 +44,7 @@ main(int argc, char **argv) {
     const char *host, *port_string;
     uint16_t port;
     bool use_ssl;
-    const char *cert_path, *key_path;
+    const char *cert_path, *key_path, *ca_certs_path;
 
     cmdline = c_command_line_new();
 
@@ -53,6 +53,9 @@ main(int argc, char **argv) {
                               "path", NULL);
     c_command_line_add_option(cmdline, NULL, "key", "the ssl private key",
                               "path", NULL);
+    c_command_line_add_option(cmdline, NULL, "ca-certs",
+                              "the file containing ca certificates for "
+                              "client authentication", "path", NULL);
 
     c_command_line_add_argument(cmdline, "the host to bind to", "host");
     c_command_line_add_argument(cmdline, "the port to listen on", "port");
@@ -70,6 +73,7 @@ main(int argc, char **argv) {
     if (use_ssl) {
         cert_path = c_command_line_option_value(cmdline, "cert");
         key_path = c_command_line_option_value(cmdline, "key");
+        ca_certs_path = c_command_line_option_value(cmdline, "ca-certs");
     }
 
     if (use_ssl)
@@ -88,8 +92,10 @@ main(int argc, char **argv) {
         struct io_ssl_server_cfg cfg;
 
         memset(&cfg, 0, sizeof(struct io_ssl_server_cfg));
+
         cfg.cert_path = cert_path;
         cfg.key_path = key_path;
+        cfg.ca_certs_path = ca_certs_path;
 
         if (io_tcp_server_enable_ssl(ioex.server, &cfg) == -1)
             ioex_die("cannot enable ssl: %s", c_get_error());

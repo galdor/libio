@@ -137,6 +137,10 @@ struct io_ssl_server_cfg {
     const char *key_path;
     const char *dh_path;
 
+    /* Client certificate support */
+    const char *ca_certs_path;
+
+    /* Misc */
     const char *ciphers;
 };
 
@@ -144,9 +148,11 @@ struct io_ssl_client_cfg {
     const char *ca_cert_path;
     const char *ca_cert_directory;
 
+    /* Client certificate support */
     const char *cert_path;
     const char *key_path;
 
+    /* Misc */
     const char *ciphers;
 };
 
