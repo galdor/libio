@@ -80,9 +80,9 @@ main(int argc, char **argv) {
     ioex.client = io_tcp_client_new(ioex.base, ioex_on_client_event, NULL);
 
     if (use_ssl) {
-        struct io_ssl_cfg cfg;
+        struct io_ssl_client_cfg cfg;
 
-        memset(&cfg, 0, sizeof(struct io_ssl_cfg));
+        memset(&cfg, 0, sizeof(struct io_ssl_client_cfg));
         cfg.ca_cert_path = ca_cert;
 
         if (io_tcp_client_enable_ssl(ioex.client, &cfg) == -1)

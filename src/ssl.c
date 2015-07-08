@@ -111,7 +111,7 @@ io_ssl_dh_delete(DH *dh) {
 }
 
 SSL_CTX *
-io_ssl_ctx_new_client(const struct io_ssl_cfg *cfg) {
+io_ssl_ctx_new_client(const struct io_ssl_client_cfg *cfg) {
     const char *ciphers;
     long options, mode;
     int verify_mode;
@@ -169,7 +169,7 @@ error:
 }
 
 SSL_CTX *
-io_ssl_ctx_new_server(const struct io_ssl_cfg *cfg) {
+io_ssl_ctx_new_server(const struct io_ssl_server_cfg *cfg) {
     const char *ciphers;
     long options, mode;
     int verify_mode;
@@ -202,14 +202,6 @@ io_ssl_ctx_new_server(const struct io_ssl_cfg *cfg) {
 
     SSL_CTX_set_verify(ctx, verify_mode, NULL);
     SSL_CTX_set_verify_depth(ctx, 9);
-
-    if (cfg->ca_cert_path) {
-        if (SSL_CTX_load_verify_locations(ctx, cfg->ca_cert_path, NULL) != 1) {
-            c_set_error("cannot load ca certificate from %s: %s",
-                        cfg->ca_cert_path, io_ssl_get_error());
-            goto error;
-        }
-    }
 
     if (!cfg->cert_path) {
         c_set_error("missing certificate");

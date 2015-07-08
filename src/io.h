@@ -132,12 +132,16 @@ int io_base_read_events(struct io_base *);
  *  TCP
  * ------------------------------------------------------------------------ */
 /* SSL */
-struct io_ssl_cfg {
-    const char *ca_cert_path;
-    const char *ca_cert_directory;
+struct io_ssl_server_cfg {
     const char *cert_path;
     const char *key_path;
     const char *dh_path;
+    const char *ciphers;
+};
+
+struct io_ssl_client_cfg {
+    const char *ca_cert_path;
+    const char *ca_cert_directory;
     const char *ciphers;
 };
 
@@ -165,7 +169,8 @@ void io_tcp_client_delete(struct io_tcp_client *);
 const char *io_tcp_client_host(const struct io_tcp_client *);
 uint16_t io_tcp_client_port(const struct io_tcp_client *);
 
-int io_tcp_client_enable_ssl(struct io_tcp_client *, const struct io_ssl_cfg *);
+int io_tcp_client_enable_ssl(struct io_tcp_client *,
+                             const struct io_ssl_client_cfg *);
 bool io_tcp_client_is_ssl_enabled(struct io_tcp_client *);
 
 bool io_tcp_client_is_connected(const struct io_tcp_client *);
@@ -208,7 +213,8 @@ size_t io_tcp_server_nb_listeners(const struct io_tcp_server *);
 const struct io_tcp_listener *
 io_tcp_server_nth_listener(const struct io_tcp_server *, size_t);
 
-int io_tcp_server_enable_ssl(struct io_tcp_server *, const struct io_ssl_cfg *);
+int io_tcp_server_enable_ssl(struct io_tcp_server *,
+                             const struct io_ssl_server_cfg *);
 bool io_tcp_server_is_ssl_enabled(struct io_tcp_server *);
 
 int io_tcp_server_listen(struct io_tcp_server *, const char *, uint16_t);

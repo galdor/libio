@@ -440,7 +440,7 @@ io_tcp_server_nth_listener(const struct io_tcp_server *server, size_t idx) {
 
 int
 io_tcp_server_enable_ssl(struct io_tcp_server *server,
-                         const struct io_ssl_cfg *cfg) {
+                         const struct io_ssl_server_cfg *cfg) {
     SSL_CTX *ctx;
 
     assert(!server->uses_ssl);

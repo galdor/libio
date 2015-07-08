@@ -160,8 +160,8 @@ const char *io_ssl_get_error(void);
 DH *io_ssl_dh_new(const char *);
 void io_ssl_dh_delete(DH *);
 
-SSL_CTX *io_ssl_ctx_new_client(const struct io_ssl_cfg *);
-SSL_CTX *io_ssl_ctx_new_server(const struct io_ssl_cfg *);
+SSL_CTX *io_ssl_ctx_new_client(const struct io_ssl_client_cfg *);
+SSL_CTX *io_ssl_ctx_new_server(const struct io_ssl_server_cfg *);
 void io_ssl_ctx_delete(SSL_CTX *);
 
 SSL *io_ssl_new(SSL_CTX *, int);

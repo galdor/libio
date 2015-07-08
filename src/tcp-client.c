@@ -77,7 +77,7 @@ io_tcp_client_port(const struct io_tcp_client *client) {
 
 int
 io_tcp_client_enable_ssl(struct io_tcp_client *client,
-                         const struct io_ssl_cfg *cfg) {
+                         const struct io_ssl_client_cfg *cfg) {
     SSL_CTX *ctx;
 
     assert(!client->uses_ssl);

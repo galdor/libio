@@ -85,9 +85,9 @@ main(int argc, char **argv) {
     ioex.server = io_tcp_server_new(ioex.base, ioex_on_server_event, NULL);
 
     if (use_ssl) {
-        struct io_ssl_cfg cfg;
+        struct io_ssl_server_cfg cfg;
 
-        memset(&cfg, 0, sizeof(struct io_ssl_cfg));
+        memset(&cfg, 0, sizeof(struct io_ssl_server_cfg));
         cfg.cert_path = cert_path;
         cfg.key_path = key_path;
 
