@@ -195,6 +195,11 @@ io_tcp_client_disconnect(struct io_tcp_client *client) {
 
 void
 io_tcp_client_close(struct io_tcp_client *client) {
+    if (client->uses_ssl) {
+        io_ssl_ctx_delete(client->ssl_ctx);
+        client->ssl_ctx = NULL;
+    }
+
     if (client->state == IO_TCP_CLIENT_STATE_DISCONNECTED)
         return;
 
@@ -212,9 +217,6 @@ io_tcp_client_close(struct io_tcp_client *client) {
     c_buffer_clear(client->wbuf);
 
     if (client->uses_ssl) {
-        io_ssl_ctx_delete(client->ssl_ctx);
-        client->ssl_ctx = NULL;
-
         io_ssl_delete(client->ssl);
         client->ssl = NULL;
 
