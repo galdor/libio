@@ -294,7 +294,8 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
     if (watcher) {
         is_new = false;
 
-        if (watcher->events == events
+        if (watcher->enabled
+         && watcher->events == events
          && watcher->cb_arg == arg
          && watcher->u.fd.cb == cb) {
             return 0;
@@ -329,11 +330,10 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
         return -1;
     }
 
-    if (is_new) {
-        watcher->registered = true;
+    if (is_new)
         io_watcher_array_add(&base->fd_watchers, fd, watcher);
-    }
 
+    watcher->registered = true;
     watcher->enabled = true;
     return 0;
 }
@@ -353,6 +353,7 @@ io_base_unwatch_fd(struct io_base *base, int fd) {
     if (io_base_disable_fd_backend(base, watcher) == -1)
         return -1;
 
+    watcher->registered = false;
     watcher->enabled = false;
     if (!watcher->in_cb) {
         io_watcher_array_remove(&base->fd_watchers, fd);
@@ -415,6 +416,7 @@ io_base_unwatch_signal(struct io_base *base, int signo) {
     if (io_base_disable_signal_backend(base, watcher) == -1)
         return -1;
 
+    watcher->registered = false;
     watcher->enabled = false;
     if (!watcher->in_cb) {
         io_watcher_array_remove(&base->signal_watchers, signo);
@@ -522,6 +524,7 @@ io_base_remove_timer(struct io_base *base, int id) {
     if (io_base_disable_timer_backend(base, watcher) == -1)
         return -1;
 
+    watcher->registered = false;
     watcher->enabled = false;
     if (!watcher->in_cb) {
         io_watcher_array_remove(&base->timer_watchers, id);
@@ -595,6 +598,7 @@ io_base_unwatch_child(struct io_base *base, pid_t pid) {
         return -1;
     }
 
+    watcher->registered = false;
     watcher->enabled = false;
     if (!watcher->in_cb) {
         c_hash_table_remove(base->child_watchers, &pid);
