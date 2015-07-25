@@ -184,7 +184,9 @@ struct io_tcp_client {
 
     char *host;
     uint16_t port;
-    struct io_address addr;
+    struct io_address *addrs;
+    size_t nb_addrs;
+    size_t addr_idx; /* in addrs */
 
     int sock;
 

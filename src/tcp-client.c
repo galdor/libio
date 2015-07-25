@@ -17,6 +17,8 @@
 
 #include "internal.h"
 
+static int io_tcp_client_try_connect(struct io_tcp_client *);
+
 static int io_tcp_client_watch(struct io_tcp_client *, uint32_t);
 static void io_tcp_client_signal_event(struct io_tcp_client *,
                                        enum io_tcp_client_event);
@@ -58,6 +60,7 @@ io_tcp_client_delete(struct io_tcp_client *client) {
         return;
 
     c_free(client->host);
+    c_free(client->addrs);
 
     c_buffer_delete(client->rbuf);
     c_buffer_delete(client->wbuf);
@@ -114,52 +117,26 @@ io_tcp_client_wbuf(const struct io_tcp_client *client) {
 int
 io_tcp_client_connect(struct io_tcp_client *client,
                       const char *host, uint16_t port) {
-    struct io_address addr;
-    int sock;
+    struct io_address *addrs;
+    size_t nb_addrs;
 
     assert(client->state == IO_TCP_CLIENT_STATE_DISCONNECTED);
 
-    if (io_address_init(&addr, host, port) == -1) {
-        c_set_error("cannot initialize address: %s", c_get_error());
-        return -1;
-    }
-
-    sock = socket(io_address_family(&addr), SOCK_STREAM, IPPROTO_TCP);
-    if (sock == -1) {
-        c_set_error("cannot create socket: %s", strerror(errno));
-        return -1;
-    }
-
-    if (io_fd_set_non_blocking(sock) == -1) {
-        close(sock);
-        return -1;
-    }
-
-    if (connect(sock, io_address_sockaddr(&addr),
-                io_address_length(&addr)) == -1) {
-        if (errno != EINPROGRESS) {
-            c_set_error("cannot connect socket: %s", strerror(errno));
-            close(sock);
-            return -1;
-        }
-    }
-
-    if (io_base_watch_fd(client->base, sock, IO_EVENT_FD_WRITE,
-                         io_tcp_client_on_event_connecting, client) == -1) {
-        c_set_error("cannot watch socket: %s", c_get_error());
-        close(sock);
+    if (io_address_resolve(host, port, AF_UNSPEC, SOCK_STREAM, IPPROTO_TCP,
+                           &addrs, &nb_addrs) == -1) {
+        c_set_error("cannot resolve address: %s", c_get_error());
         return -1;
     }
 
     c_free(client->host);
     client->host = c_strdup(host);
     client->port = port;
-    client->addr = addr;
 
-    client->sock = sock;
+    client->addrs = addrs;
+    client->nb_addrs = nb_addrs;
+    client->addr_idx = 0;
 
-    client->state = IO_TCP_CLIENT_STATE_CONNECTING;
-    return 0;
+    return io_tcp_client_try_connect(client);
 }
 
 void
@@ -305,6 +282,48 @@ io_tcp_client_ssl_connect(struct io_tcp_client *client) {
 }
 
 static int
+io_tcp_client_try_connect(struct io_tcp_client *client) {
+    struct io_address *addr;
+    int sock;
+
+    assert(client->state == IO_TCP_CLIENT_STATE_DISCONNECTED);
+
+    addr = client->addrs + client->addr_idx;
+
+    sock = socket(io_address_family(addr), SOCK_STREAM, IPPROTO_TCP);
+    if (sock == -1) {
+        c_set_error("cannot create socket: %s", strerror(errno));
+        return -1;
+    }
+
+    if (io_fd_set_non_blocking(sock) == -1) {
+        close(sock);
+        return -1;
+    }
+
+    if (connect(sock, io_address_sockaddr(addr),
+                io_address_length(addr)) == -1) {
+        if (errno != EINPROGRESS) {
+            c_set_error("cannot connect socket: %s", strerror(errno));
+            close(sock);
+            return -1;
+        }
+    }
+
+    if (io_base_watch_fd(client->base, sock, IO_EVENT_FD_WRITE,
+                         io_tcp_client_on_event_connecting, client) == -1) {
+        c_set_error("cannot watch socket: %s", c_get_error());
+        close(sock);
+        return -1;
+    }
+
+    client->sock = sock;
+    client->state = IO_TCP_CLIENT_STATE_CONNECTING;
+
+    return 0;
+}
+
+static int
 io_tcp_client_watch(struct io_tcp_client *client, uint32_t events) {
     if (io_base_watch_fd(client->base, client->sock, events,
                          io_tcp_client_on_event, client) == -1) {
@@ -389,13 +408,29 @@ io_tcp_client_on_event_connecting(int sock, uint32_t events, void *arg) {
     }
 
     if (error != 0) {
+        const struct io_address *addr;
+
+        addr = client->addrs + client->addr_idx;
+
         io_tcp_client_signal_error(client, "cannot connect socket to %s: %s",
-                                   io_address_host_port_string(&client->addr),
+                                   io_address_host_port_string(addr),
                                    strerror(error));
 
         io_tcp_client_close(client);
-        io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_FAILED);
-        return;
+
+        if (client->addr_idx == client->nb_addrs - 1) {
+            /* No more address to try */
+            io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_FAILED);
+            return;
+        }
+
+        client->addr_idx++;
+
+        if (io_tcp_client_try_connect(client) == -1) {
+            io_tcp_client_signal_error(client, "%s", c_get_error());
+            io_tcp_client_signal_event(client, IO_TCP_CLIENT_EVENT_CONN_CLOSED);
+            return;
+        }
     }
 
     /* The connection is now established */
