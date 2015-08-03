@@ -441,36 +441,6 @@ io_base_unwatch_sigchld(struct io_base *base) {
 }
 
 int
-io_base_block_sigchld(struct io_base *base) {
-    sigset_t set;
-
-    sigemptyset(&set);
-    sigaddset(&set, SIGCHLD);
-
-    if (sigprocmask(SIG_BLOCK, &set, NULL) == -1) {
-        c_set_error("%s", strerror(errno));
-        return -1;
-    }
-
-    return 0;
-}
-
-int
-io_base_unblock_sigchld(struct io_base *base) {
-    sigset_t set;
-
-    sigemptyset(&set);
-    sigaddset(&set, SIGCHLD);
-
-    if (sigprocmask(SIG_UNBLOCK, &set, NULL) == -1) {
-        c_set_error("%s", strerror(errno));
-        return -1;
-    }
-
-    return 0;
-}
-
-int
 io_base_add_timer(struct io_base *base, uint64_t duration, uint32_t flags,
                   io_timer_cb cb, void *arg) {
     struct io_watcher *watcher;
