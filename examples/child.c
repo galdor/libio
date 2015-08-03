@@ -58,8 +58,8 @@ main(int argc, char **argv) {
         ioex_die("cannot watch signal: %s", c_get_error());
     if (io_base_watch_signal(ioex.base, SIGTERM, ioex_on_signal, NULL) == -1)
         ioex_die("cannot watch signal: %s", c_get_error());
-
-    /* TODO block SIGCHLD */
+    if (io_base_watch_sigchld(ioex.base) == -1)
+        ioex_die("cannot watch sigchld: %s", c_get_error());
 
     ioex.pid = fork();
     if (ioex.pid == -1)
@@ -78,6 +78,19 @@ main(int argc, char **argv) {
     }
 
     while (!ioex.do_exit) {
+        if (io_base_read_events(ioex.base) == -1)
+            ioex_die("cannot read events: %s", c_get_error());
+    }
+
+    io_base_unwatch_signal(ioex.base, SIGINT);
+    io_base_unwatch_signal(ioex.base, SIGTERM);
+
+    if (ioex.pid > 1) {
+        if (kill(ioex.pid, SIGTERM) == -1)
+            ioex_die("cannot kill child %d: %s", ioex.pid, strerror(errno));
+    }
+
+    while (io_base_has_watchers(ioex.base)) {
         if (io_base_read_events(ioex.base) == -1)
             ioex_die("cannot read events: %s", c_get_error());
     }
@@ -109,8 +122,7 @@ ioex_on_signal(int signo, void *arg) {
     switch (signo) {
     case SIGINT:
     case SIGTERM:
-        if (kill(ioex.pid, SIGKILL) == -1)
-            ioex_die("cannot kill child %d: %s", ioex.pid, strerror(errno));
+        ioex.do_exit = true;
         break;
     }
 }
@@ -131,5 +143,8 @@ ioex_on_child_event(pid_t pid, uint32_t event, int value, void *arg) {
         break;
     }
 
+    ioex.pid = (pid_t)-1;
     ioex.do_exit = true;
+
+    io_base_unwatch_sigchld(ioex.base);
 }
