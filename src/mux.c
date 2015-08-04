@@ -651,6 +651,8 @@ io_base_on_sigchld(int signo, void *arg) {
 
             /* TODO signal error */
             return;
+        } else if (pid == 0) {
+            return;
         }
 
         if (c_hash_table_get(base->child_watchers, &pid,
