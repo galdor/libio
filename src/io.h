@@ -188,6 +188,7 @@ struct c_buffer *io_tcp_client_wbuf(const struct io_tcp_client *);
 
 int io_tcp_client_connect(struct io_tcp_client *, const char *, uint16_t);
 void io_tcp_client_disconnect(struct io_tcp_client *);
+int io_tcp_client_reconnect(struct io_tcp_client *);
 void io_tcp_client_close(struct io_tcp_client *);
 
 void io_tcp_client_write(struct io_tcp_client *, const void *, size_t);

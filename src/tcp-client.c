@@ -176,6 +176,15 @@ io_tcp_client_disconnect(struct io_tcp_client *client) {
     client->state = IO_TCP_CLIENT_STATE_DISCONNECTING;
 }
 
+int
+io_tcp_client_reconnect(struct io_tcp_client *client) {
+    assert(client->state == IO_TCP_CLIENT_STATE_DISCONNECTED);
+
+    client->addr_idx = 0;
+
+    return io_tcp_client_try_connect(client);
+}
+
 void
 io_tcp_client_close(struct io_tcp_client *client) {
     if (client->uses_ssl) {
