@@ -155,10 +155,16 @@ io_tcp_client_disconnect(struct io_tcp_client *client) {
     }
 
     if (shutdown(client->sock, mode) == -1) {
-        io_tcp_client_signal_error(client, "cannot shutdown socket: %s",
-                                   strerror(errno));
-        client->failing = true;
-        return;
+        if (errno == ENOTCONN) {
+            /* The connection is already closed; we clear the write buffer to
+             * make sure we will not try to write anything. */
+            c_buffer_clear(client->wbuf);
+        } else {
+            io_tcp_client_signal_error(client, "cannot shutdown socket: %s",
+                                       strerror(errno));
+            client->failing = true;
+            return;
+        }
     }
 
     if (io_tcp_client_watch(client, IO_EVENT_FD_WRITE) == -1) {
