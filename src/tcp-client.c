@@ -205,8 +205,12 @@ io_tcp_client_close(struct io_tcp_client *client) {
 
 void
 io_tcp_client_write(struct io_tcp_client *client, const void *data, size_t sz) {
-    if (client->state != IO_TCP_CLIENT_STATE_CONNECTED)
+    if (client->state != IO_TCP_CLIENT_STATE_CONNECTED) {
+        io_tcp_client_signal_error(client,
+                                   "cannot write: client is not connected");
         return;
+    }
+
     if (client->failing)
         return;
 
@@ -222,8 +226,12 @@ void
 io_tcp_client_signal_data_written(struct io_tcp_client *client) {
     uint32_t flags;
 
-    if (client->state != IO_TCP_CLIENT_STATE_CONNECTED)
+    if (client->state != IO_TCP_CLIENT_STATE_CONNECTED) {
+        io_tcp_client_signal_error(client,
+                                   "cannot write: client is not connected");
         return;
+    }
+
     if (client->failing)
         return;
 
