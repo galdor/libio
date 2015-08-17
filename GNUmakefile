@@ -4,13 +4,15 @@ libdir= $(prefix)/lib
 incdir= $(prefix)/include
 bindir= $(prefix)/bin
 
-CC=   clang
+CC= clang
 
+CFLAGS+= $(cflags)
 CFLAGS+= -std=c99
 CFLAGS+= -Wall -Wextra -Werror -Wsign-conversion
 CFLAGS+= -Wno-unused-parameter -Wno-unused-function
 CFLAGS+= -Isrc
 
+LDFLAGS+= $(ldflags)
 LDFLAGS+= -L.
 
 LDLIBS+= -lio -lcore -lutest -lcrypto -lssl
