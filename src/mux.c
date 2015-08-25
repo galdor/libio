@@ -597,6 +597,44 @@ io_base_has_watchers(const struct io_base *base) {
         || has_child_watcher;
 }
 
+void
+io_base_print_watchers(const struct io_base *base, FILE *file) {
+    struct c_hash_table_iterator *it;
+    const struct io_watcher *watcher;
+
+    fprintf(file, "libio watchers:\n");
+
+    for (size_t i = 0; i < base->fd_watchers.size; i++) {
+        watcher = base->fd_watchers.watchers[i];
+        if (!watcher)
+            continue;
+
+        fprintf(file, "  %-8s  %5d\n", "fd", watcher->u.fd.fd);
+    }
+
+    for (size_t i = 0; i < base->signal_watchers.size; i++) {
+        watcher = base->signal_watchers.watchers[i];
+        if (!watcher)
+            continue;
+
+        fprintf(file, "  %-8s  %5d\n", "signal", watcher->u.signal.signo);
+    }
+
+    for (size_t i = 0; i < base->timer_watchers.size; i++) {
+        watcher = base->timer_watchers.watchers[i];
+        if (!watcher)
+            continue;
+
+        fprintf(file, "  %-8s  %5d\n", "timer", watcher->u.timer.id);
+    }
+
+    it = c_hash_table_iterate(base->child_watchers);
+    while (c_hash_table_iterator_next(it, NULL, (void **)&watcher) == 1) {
+        fprintf(file, "  %-8s  %5d\n", "child", watcher->u.child.pid);
+    }
+    c_hash_table_iterator_delete(it);
+}
+
 int
 io_base_read_events(struct io_base *base) {
     if (io_base_read_events_backend(base) == -1)

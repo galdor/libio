@@ -124,6 +124,8 @@ bool io_base_is_child_watched(const struct io_base *, pid_t);
 void io_base_sigchld_handler(int, void *);
 
 bool io_base_has_watchers(const struct io_base *);
+void io_base_print_watchers(const struct io_base *, FILE *);
+
 int io_base_read_events(struct io_base *);
 
 /* ------------------------------------------------------------------------
