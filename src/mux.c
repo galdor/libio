@@ -597,6 +597,20 @@ io_base_has_watchers(const struct io_base *base) {
         || has_child_watcher;
 }
 
+size_t
+io_base_nb_watchers(const struct io_base *base) {
+    size_t count;
+
+    count = 0;
+
+    count += base->fd_watchers.nb_watchers;
+    count += base->signal_watchers.nb_watchers;
+    count += base->timer_watchers.nb_watchers;
+    count += c_hash_table_nb_entries(base->child_watchers);
+
+    return count;
+}
+
 void
 io_base_print_watchers(const struct io_base *base, FILE *file) {
     struct c_hash_table_iterator *it;
