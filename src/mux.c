@@ -620,7 +620,7 @@ io_base_print_watchers(const struct io_base *base, FILE *file) {
 
     for (size_t i = 0; i < base->fd_watchers.size; i++) {
         watcher = base->fd_watchers.watchers[i];
-        if (!watcher)
+        if (!watcher || !watcher->enabled)
             continue;
 
         fprintf(file, "  %-8s  %5d\n", "fd", watcher->u.fd.fd);
@@ -628,7 +628,7 @@ io_base_print_watchers(const struct io_base *base, FILE *file) {
 
     for (size_t i = 0; i < base->signal_watchers.size; i++) {
         watcher = base->signal_watchers.watchers[i];
-        if (!watcher)
+        if (!watcher || !watcher->enabled)
             continue;
 
         fprintf(file, "  %-8s  %5d\n", "signal", watcher->u.signal.signo);
@@ -636,7 +636,7 @@ io_base_print_watchers(const struct io_base *base, FILE *file) {
 
     for (size_t i = 0; i < base->timer_watchers.size; i++) {
         watcher = base->timer_watchers.watchers[i];
-        if (!watcher)
+        if (!watcher || !watcher->enabled)
             continue;
 
         fprintf(file, "  %-8s  %5d\n", "timer", watcher->u.timer.id);
@@ -644,6 +644,9 @@ io_base_print_watchers(const struct io_base *base, FILE *file) {
 
     it = c_hash_table_iterate(base->child_watchers);
     while (c_hash_table_iterator_next(it, NULL, (void **)&watcher) == 1) {
+        if (!watcher->enabled)
+            continue;
+
         fprintf(file, "  %-8s  %5d\n", "child", watcher->u.child.pid);
     }
     c_hash_table_iterator_delete(it);
