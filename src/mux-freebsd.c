@@ -81,7 +81,7 @@ io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
 
     if (watcher->events & IO_EVENT_FD_WRITE) {
         events[nb_events].ident = (uintptr_t)watcher->u.fd.fd;
-        events[nb_events].filter = EVFILT_READ;
+        events[nb_events].filter = EVFILT_WRITE;
         events[nb_events].flags = EV_ADD;
         events[nb_events].udata = watcher;
         nb_events++;
