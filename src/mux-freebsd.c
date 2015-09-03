@@ -136,8 +136,11 @@ io_base_enable_signal_backend(struct io_base *base,
                               struct io_watcher *watcher) {
     struct kevent event;
     struct sigaction sa;
+    int signo;
 
     assert(watcher->type == IO_WATCHER_SIGNAL);
+
+    signo = watcher->u.signal.signo;
 
     memset(&event, 0, sizeof(struct kevent));
     event.ident = (uintptr_t)watcher->u.signal.signo;
@@ -145,11 +148,13 @@ io_base_enable_signal_backend(struct io_base *base,
     event.flags = EV_ADD;
     event.udata = watcher;
 
-    if (!watcher->registered) {
+    /* Ignoring SIGCHLD makes the kernel automatically collect zombie
+     * processes without notifying us. */
+    if (!watcher->registered && signo != SIGCHLD) {
         memset(&sa, 0, sizeof(struct sigaction));
         sa.sa_handler = SIG_IGN;
 
-        if (sigaction(watcher->u.signal.signo, &sa, NULL) == -1) {
+        if (sigaction(signo, &sa, NULL) == -1) {
             c_set_error("cannot ignore signal: %s", strerror(errno));
             return -1;
         }
@@ -157,7 +162,8 @@ io_base_enable_signal_backend(struct io_base *base,
 
     if (kevent(base->fd, &event, 1, NULL, 0, NULL) == -1) {
         c_set_error("cannot add signal filter to kqueue: %s", strerror(errno));
-        if (!watcher->registered) {
+
+        if (!watcher->registered && signo != SIGCHLD) {
             memset(&sa, 0, sizeof(struct sigaction));
             sa.sa_handler = SIG_DFL;
 
@@ -174,8 +180,11 @@ io_base_disable_signal_backend(struct io_base *base,
                                struct io_watcher *watcher) {
     struct kevent event;
     struct sigaction sa;
+    int signo;
 
     assert(watcher->type == IO_WATCHER_SIGNAL);
+
+    signo = watcher->u.signal.signo;
 
     memset(&event, 0, sizeof(struct kevent));
     event.ident = (uintptr_t)watcher->u.signal.signo;
@@ -189,10 +198,12 @@ io_base_disable_signal_backend(struct io_base *base,
     }
 
     /* Restore the default signal handler */
-    memset(&sa, 0, sizeof(struct sigaction));
-    sa.sa_handler = SIG_DFL;
+    if (signo != SIGCHLD) {
+        memset(&sa, 0, sizeof(struct sigaction));
+        sa.sa_handler = SIG_DFL;
 
-    sigaction(watcher->u.signal.signo, &sa, NULL);
+        sigaction(watcher->u.signal.signo, &sa, NULL);
+    }
 
     return 0;
 }
