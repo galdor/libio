@@ -135,7 +135,7 @@ int
 io_base_enable_signal_backend(struct io_base *base,
                               struct io_watcher *watcher) {
     struct kevent event;
-    sigset_t mask;
+    struct sigaction sa;
 
     assert(watcher->type == IO_WATCHER_SIGNAL);
 
@@ -146,19 +146,23 @@ io_base_enable_signal_backend(struct io_base *base,
     event.udata = watcher;
 
     if (!watcher->registered) {
-        sigemptyset(&mask);
-        sigaddset(&mask, watcher->u.signal.signo);
+        memset(&sa, 0, sizeof(struct sigaction));
+        sa.sa_handler = SIG_IGN;
 
-        if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1) {
-            c_set_error("cannot block signal: %s", strerror(errno));
+        if (sigaction(watcher->u.signal.signo, &sa, NULL) == -1) {
+            c_set_error("cannot ignore signal: %s", strerror(errno));
             return -1;
         }
     }
 
     if (kevent(base->fd, &event, 1, NULL, 0, NULL) == -1) {
         c_set_error("cannot add signal filter to kqueue: %s", strerror(errno));
-        if (!watcher->registered)
-            sigprocmask(SIG_UNBLOCK, &mask, NULL);
+        if (!watcher->registered) {
+            memset(&sa, 0, sizeof(struct sigaction));
+            sa.sa_handler = SIG_DFL;
+
+            sigaction(watcher->u.signal.signo, &sa, NULL);
+        }
         return -1;
     }
 
@@ -169,7 +173,7 @@ int
 io_base_disable_signal_backend(struct io_base *base,
                                struct io_watcher *watcher) {
     struct kevent event;
-    sigset_t mask;
+    struct sigaction sa;
 
     assert(watcher->type == IO_WATCHER_SIGNAL);
 
@@ -184,10 +188,11 @@ io_base_disable_signal_backend(struct io_base *base,
         return -1;
     }
 
-    /* Restore the old signal handler */
-    sigemptyset(&mask);
-    sigaddset(&mask, watcher->u.signal.signo);
-    sigprocmask(SIG_UNBLOCK, &mask, NULL);
+    /* Restore the default signal handler */
+    memset(&sa, 0, sizeof(struct sigaction));
+    sa.sa_handler = SIG_DFL;
+
+    sigaction(watcher->u.signal.signo, &sa, NULL);
 
     return 0;
 }
