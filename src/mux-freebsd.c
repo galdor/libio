@@ -117,7 +117,7 @@ io_base_disable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
 
     if (watcher->events & IO_EVENT_FD_WRITE) {
         events[nb_events].ident = (uintptr_t)watcher->u.signal.signo;
-        events[nb_events].filter = EVFILT_READ;
+        events[nb_events].filter = EVFILT_WRITE;
         events[nb_events].flags = EV_DELETE;
         nb_events++;
     }
