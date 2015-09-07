@@ -92,7 +92,7 @@ io_address_init_from_sockaddr_storage(struct io_address *address,
                                       const struct sockaddr_storage *ss) {
     return io_address_init_from_sockaddr(address,
                                          (const struct sockaddr *)ss,
-                                         sizeof(struct sockaddr_storage));
+                                         ss->ss_len);
 }
 
 int
