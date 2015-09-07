@@ -301,7 +301,8 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
             return 0;
         }
 
-        old_events = watcher->events;
+        old_events = watcher->old_events;
+        watcher->old_events = watcher->events;
         old_cb_arg = watcher->cb_arg;
         old_cb = watcher->u.fd.cb;
 
@@ -313,6 +314,7 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
 
         watcher = io_watcher_new(base, IO_WATCHER_FD);
 
+        old_events = 0;
         watcher->events = events;
         watcher->cb_arg = arg;
 
@@ -324,7 +326,8 @@ io_base_watch_fd(struct io_base *base, int fd, uint32_t events,
         if (is_new)
             io_watcher_delete(watcher);
 
-        watcher->events = old_events;
+        watcher->events = watcher->old_events;
+        watcher->old_events = old_events;
         watcher->cb_arg = old_cb_arg;
         watcher->u.fd.cb = old_cb;
         return -1;

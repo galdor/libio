@@ -52,6 +52,7 @@ struct io_watcher {
 
     enum io_watcher_type type;
     uint32_t events; /* enum io_event */
+    uint32_t old_events; /* enum io_event */
 
     bool registered;
     bool enabled;

@@ -62,33 +62,49 @@ io_base_free_backend(struct io_base *base) {
 int
 io_base_enable_fd_backend(struct io_base *base, struct io_watcher *watcher) {
     struct kevent events[2];
+    size_t nb_events;
+    bool watch_read, did_watch_read;
+    bool watch_write, did_watch_write;
 
     assert(watcher->type == IO_WATCHER_FD);
 
     memset(events, 0, sizeof(events));
 
-    events[0].ident = (uintptr_t)watcher->u.fd.fd;
-    events[0].filter = EVFILT_READ;
-    events[0].udata = watcher;
+    nb_events = 0;
 
-    if (watcher->events & IO_EVENT_FD_READ
-     || watcher->events & IO_EVENT_FD_HANGUP) {
-        events[0].flags = EV_ADD;
-    } else {
-        events[0].flags = EV_DELETE;
+    watch_read = (watcher->events & IO_EVENT_FD_READ)
+               | (watcher->events & IO_EVENT_FD_HANGUP);
+    did_watch_read = (watcher->old_events & IO_EVENT_FD_READ)
+                   | (watcher->old_events & IO_EVENT_FD_HANGUP);
+
+    watch_write = (watcher->events & IO_EVENT_FD_WRITE);
+    did_watch_write = (watcher->old_events & IO_EVENT_FD_WRITE);
+
+    if (did_watch_read != watch_read) {
+        events[nb_events].ident = (uintptr_t)watcher->u.fd.fd;
+        events[nb_events].filter = EVFILT_READ;
+        if (watch_read) {
+            events[nb_events].flags = EV_ADD;
+        } else {
+            events[nb_events].flags = EV_DELETE;
+        }
+        events[nb_events].udata = watcher;
+        nb_events++;
     }
 
-    events[1].ident = (uintptr_t)watcher->u.fd.fd;
-    events[1].filter = EVFILT_WRITE;
-    events[1].udata = watcher;
-
-    if (watcher->events & IO_EVENT_FD_WRITE) {
-        events[1].flags = EV_ADD;
-    } else {
-        events[1].flags = EV_DELETE;
+    if (did_watch_write != watch_write) {
+        events[nb_events].ident = (uintptr_t)watcher->u.fd.fd;
+        events[nb_events].filter = EVFILT_WRITE;
+        if (watch_write) {
+            events[nb_events].flags = EV_ADD;
+        } else {
+            events[nb_events].flags = EV_DELETE;
+        }
+        events[nb_events].udata = watcher;
+        nb_events++;
     }
 
-    if (kevent(base->fd, events, 2, NULL, 0, NULL) == -1) {
+    if (kevent(base->fd, events, nb_events, NULL, 0, NULL) == -1) {
         c_set_error("cannot add fd filter to kqueue: %s",
                     strerror(errno));
         return -1;
