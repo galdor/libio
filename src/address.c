@@ -90,9 +90,18 @@ io_address_init_from_sockaddr(struct io_address *address,
 int
 io_address_init_from_sockaddr_storage(struct io_address *address,
                                       const struct sockaddr_storage *ss) {
+    socklen_t len;
+
+#if defined(IO_PLATFORM_LINUX)
+    len = sizeof(struct sockaddr_storage);
+#elif defined(IO_PLATFORM_FREEBSD)
+    len = ss->ss_len;
+#else
+#   error "io_address_init_from_sockaddr_storage() is not supported on this platform"
+#endif
+
     return io_address_init_from_sockaddr(address,
-                                         (const struct sockaddr *)ss,
-                                         ss->ss_len);
+                                         (const struct sockaddr *)ss, len);
 }
 
 int
