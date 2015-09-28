@@ -163,7 +163,7 @@ io_watcher_array_add(struct io_watcher_array *array, int id,
             nsize = (size_t)id + 1;
 
         array->watchers = c_realloc(array->watchers,
-                                    nsize * sizeof(struct io_watcher));
+                                    nsize * sizeof(struct io_watcher *));
         memset(array->watchers + array->size, 0,
                (nsize - array->size) * sizeof(struct io_watcher *));
 
