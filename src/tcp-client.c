@@ -420,6 +420,7 @@ io_tcp_client_on_event_connecting(int sock, uint32_t events, void *arg) {
 
     /* Check the socket status to know whether the connection succeeded or
      * not */
+    error = 0;
     len = sizeof(int);
     if (getsockopt(client->sock, SOL_SOCKET, SO_ERROR, &error, &len) == -1) {
         io_tcp_client_signal_error(client, "cannot get socket error: %s",
