@@ -182,6 +182,8 @@ io_tcp_client_reconnect(struct io_tcp_client *client) {
 
     client->addr_idx = 0;
 
+    c_buffer_clear(client->rbuf);
+
     return io_tcp_client_try_connect(client);
 }
 
@@ -205,7 +207,6 @@ io_tcp_client_close(struct io_tcp_client *client) {
     close(client->sock);
     client->sock = -1;
 
-    c_buffer_clear(client->rbuf);
     c_buffer_clear(client->wbuf);
 
     if (client->uses_ssl) {
