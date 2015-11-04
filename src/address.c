@@ -41,7 +41,13 @@ io_address_init(struct io_address *address, const char *host, uint16_t port) {
 
     ret = getaddrinfo(host, service, &hints, &res);
     if (ret != 0) {
-        c_set_error("cannot resolve %s:%u: %s", host, port, gai_strerror(ret));
+        if (port == 0) {
+            c_set_error("cannot resolve %s: %s",
+                        host, gai_strerror(ret));
+        } else {
+            c_set_error("cannot resolve %s:%u: %s",
+                        host, port, gai_strerror(ret));
+        }
         return -1;
     }
 
