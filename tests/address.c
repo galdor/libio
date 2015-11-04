@@ -33,14 +33,14 @@ TEST(init) {
     TEST_INT_EQ(io_address_init(&addr, "::1", 65535), 0);
     TEST_INT_EQ(io_address_family(&addr), AF_INET6);
     TEST_UINT_EQ(io_address_port(&addr), 65535);
-    TEST_STRING_EQ(io_address_host_string(&addr), "[::1]");
+    TEST_STRING_EQ(io_address_host_string(&addr), "::1");
     TEST_STRING_EQ(io_address_host_port_string(&addr), "[::1]:65535");
 
     TEST_INT_EQ(io_address_init(&addr, "fe80::ed61:2057:9f89:447f", 1234), 0);
     TEST_INT_EQ(io_address_family(&addr), AF_INET6);
     TEST_UINT_EQ(io_address_port(&addr), 1234);
     TEST_STRING_EQ(io_address_host_string(&addr),
-                   "[fe80::ed61:2057:9f89:447f]");
+                   "fe80::ed61:2057:9f89:447f");
     TEST_STRING_EQ(io_address_host_port_string(&addr),
                    "[fe80::ed61:2057:9f89:447f]:1234");
 }
@@ -77,7 +77,7 @@ TEST(init_from_sockaddr) {
     TEST_INT_EQ(io_address_family(&addr), AF_INET6);
     TEST_UINT_EQ(io_address_port(&addr), 1234);
     TEST_STRING_EQ(io_address_host_string(&addr),
-                   "[fe80::ed61:2057:9f89:447f]");
+                   "fe80::ed61:2057:9f89:447f");
     TEST_STRING_EQ(io_address_host_port_string(&addr),
                    "[fe80::ed61:2057:9f89:447f]:1234");
 

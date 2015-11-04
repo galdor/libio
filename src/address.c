@@ -278,13 +278,12 @@ io_address_update_strings(struct io_address *address) {
         return -1;
     }
 
+    c_strlcpy(address->host_string, host, IO_ADDRESS_HOST_BUFSIZ);
+
     if (address->ss.ss_family == AF_INET6) {
-        snprintf(address->host_string, IO_ADDRESS_HOST_BUFSIZ,
-                 "[%s]", host);
         snprintf(address->host_port_string, IO_ADDRESS_HOST_PORT_BUFSIZ,
                  "[%s]:%s", host, service);
     } else {
-        c_strlcpy(address->host_string, host, IO_ADDRESS_HOST_BUFSIZ);
         snprintf(address->host_port_string, IO_ADDRESS_HOST_PORT_BUFSIZ,
                  "%s:%s", host, service);
     }
