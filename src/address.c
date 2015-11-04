@@ -37,7 +37,7 @@ io_address_init(struct io_address *address, const char *host, uint16_t port) {
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;
-    hints.ai_flags = AI_NUMERICSERV;
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
     ret = getaddrinfo(host, service, &hints, &res);
     if (ret != 0) {
